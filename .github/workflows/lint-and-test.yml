@@ -1,0 +1,35 @@
+name: Code Quality & Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Black Formatting
+            cmd: black . --check
+          - name: Import Sorting
+            cmd: isort . --check-only --diff
+          - name: Flake8 Linting
+            cmd: flake8 .
+          - name: MyPy Type Checking
+            cmd: mypy src
+          - name: Tests
+            cmd: pytest tests -v
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('pyproject.toml') }}
+      - run: python -m pip install --upgrade pip && pip install -e ".[dev]"
+      - run: ${{ matrix.cmd }}
