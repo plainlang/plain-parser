@@ -389,35 +389,8 @@ def get_hash_value(specifications):
     return hash_text(json.dumps(specifications, indent=4))
 
 
-def get_render_range(render_range, plain_source):
-    render_range = render_range.split(",")
-    range_end = render_range[1] if len(render_range) == 2 else render_range[0]
-
-    return _get_frids_range(plain_source, render_range[0], range_end)
-
-
-def get_render_range_from(start, plain_source):
-    return _get_frids_range(plain_source, start)
-
-
-def compute_render_range(args, plain_source_tree):
-    """Compute render range from --render-range or --render-from arguments.
-
-    Args:
-        args: Parsed command line arguments
-        plain_source_tree: Parsed plain source tree
-
-    Returns:
-        List of FRIDs to render, or None to render all
-    """
-    if args.render_range:
-        return get_render_range(args.render_range, plain_source_tree)
-    elif args.render_from:
-        return get_render_range_from(args.render_from, plain_source_tree)
-    return None
-
-
-def _get_frids_range(plain_source, start, end=None):
+def get_frids_range(plain_source, start, end=None):
+    """Return the FRIDs from ``start`` through ``end`` inclusive, or through the last FRID when ``end`` is None."""
     frids = list(get_frids(plain_source))
 
     start = str(start)

@@ -100,3 +100,34 @@ def test_get_specifications_simple(get_test_data_path):
         "test reqs": [],
         "functional specs": ["- Simple functionality"],
     }
+
+
+def _four_functionalities():
+    return {plain_spec.FUNCTIONAL_REQUIREMENTS: [{"markdown": f"- Functionality {i}."} for i in range(1, 5)]}
+
+
+def test_get_frids_range_start_and_end_inclusive():
+    assert plain_spec.get_frids_range(_four_functionalities(), "2", "3") == ["2", "3"]
+
+
+def test_get_frids_range_without_end_runs_to_last_frid():
+    assert plain_spec.get_frids_range(_four_functionalities(), "3") == ["3", "4"]
+
+
+def test_get_frids_range_accepts_integer_frids():
+    assert plain_spec.get_frids_range(_four_functionalities(), 1, 1) == ["1"]
+
+
+def test_get_frids_range_unknown_start_raises():
+    with pytest.raises(plain_spec.InvalidFridArgument, match="Invalid start functionality ID: 9"):
+        plain_spec.get_frids_range(_four_functionalities(), "9")
+
+
+def test_get_frids_range_unknown_end_raises():
+    with pytest.raises(plain_spec.InvalidFridArgument, match="Invalid end functionality ID: 9"):
+        plain_spec.get_frids_range(_four_functionalities(), "1", "9")
+
+
+def test_get_frids_range_start_after_end_raises():
+    with pytest.raises(plain_spec.InvalidFridArgument, match="must be before"):
+        plain_spec.get_frids_range(_four_functionalities(), "3", "2")
