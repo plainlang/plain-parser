@@ -37,8 +37,13 @@ def test_load_linked_resources_binary_file_raises_unsupported_resource_type(temp
 
 
 def test_load_linked_resources_missing_file_raises_file_not_found(template_dir):
-    with pytest.raises(FileNotFoundError):
+    with pytest.raises(FileNotFoundError) as exc_info:
         load_linked_resources([template_dir], [{"text": "Missing", "target": "missing.md"}], "my_thing")
+
+    message = str(exc_info.value)
+    assert "missing.md" in message
+    assert "my_thing" in message
+    assert "--template-dir" not in message
 
 
 def test_load_linked_resources_base64_blob_raises(template_dir):
@@ -78,3 +83,16 @@ def test_load_linked_resources_real_base64_image_raises(template_dir):
 
     assert "face_match_request.txt" in str(exc_info.value)
     assert str(len(blob)) in str(exc_info.value)
+
+
+def test_get_loaded_templates_missing_include_names_template(template_dir):
+    from liquid2 import TemplateNotFoundError
+
+    from plain_parser.loaders import get_loaded_templates
+
+    with pytest.raises(TemplateNotFoundError) as exc_info:
+        get_loaded_templates([template_dir], "{% include 'nope.plain' %}")
+
+    message = str(exc_info.value)
+    assert "nope.plain" in message
+    assert "--template-dir" not in message

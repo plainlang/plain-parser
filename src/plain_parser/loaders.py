@@ -9,7 +9,6 @@ from plain_parser import plain_spec
 from plain_parser.exceptions import UnsupportedBase64Content, UnsupportedResourceType
 from plain_parser.liquid_nodes import Plain2CodeIncludeTag, Plain2CodeLoaderMixin
 
-#
 MAX_BASE64_BLOB_LENGTH = 8192
 
 # Matches a long contiguous base64 / base64url run, optionally preceded by a data: URI header.
@@ -54,15 +53,7 @@ def load_linked_resources(template_dirs: list[str], resources_list, module_name:
             )
 
         if content is None:
-            raise FileNotFoundError(f"""
-                Resource file {file_name} not found. Resource files are searched in the following order (highest to lowest precedence):
-
-                1. The directory containing your .plain file
-                2. The directory specified by --template-dir (if provided)
-                3. The built-in 'standard_template_library' directory
-
-                Please ensure that the resource exists in one of these locations, or specify the correct --template-dir if using custom templates.
-                """)
+            raise FileNotFoundError(f"Resource file '{file_name}' referenced in module '{module_name}' not found.")
 
         blob = find_large_base64_blob(content)
         if blob is not None:
