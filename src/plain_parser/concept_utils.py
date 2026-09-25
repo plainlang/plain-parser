@@ -1,11 +1,11 @@
 import re
 from copy import deepcopy
+from graphlib import CycleError, TopologicalSorter
 from typing import Optional
 
 import mistletoe.block_token
-import networkx as nx
 
-from plain_parser import plain_spec
+from plain_parser import graph, plain_spec
 from plain_parser.exceptions import PlainSyntaxError
 
 # These are reserved concept names that are pre-defined and must not be redefined in the definitions section.
@@ -186,34 +186,60 @@ def build_adjacency_list(definitions: Optional[list[dict]]) -> tuple[dict, dict]
     return adjacency_list, concept_definitions
 
 
+MAX_REPORTED_CYCLES = 10
+
+
+def format_cycles_error(adjacency_list: dict[str, list[str]], concept_definitions: dict[str, dict]) -> str:
+    """
+    List the elementary cycles in the graph, each as a "Cycle N: :A: -> :B: -> :A:" line
+    followed by the definition of every concept in the cycle. Arrows point from a definition
+    to a concept it mentions, each cycle starts at its earliest-defined concept, and cycles
+    are ordered by definition position, so the report reads top to bottom like the file.
+    At most MAX_REPORTED_CYCLES are listed; the search stops once one more than that is found.
+    """
+    position = {concept: index for index, concept in enumerate(concept_definitions)}
+    cycles = []
+    for cycle in graph.simple_cycles(adjacency_list, limit=MAX_REPORTED_CYCLES + 1):
+        # reverse since simple_cycles edges point from a used concept to the one defined with it
+        cycle = cycle[::-1]
+        first = min(range(len(cycle)), key=lambda i: position[cycle[i]])
+        cycles.append(cycle[first:] + cycle[:first])
+    cycles.sort(key=lambda cycle: (position[cycle[0]], len(cycle), [position[c] for c in cycle]))
+
+    if len(cycles) > MAX_REPORTED_CYCLES:
+        cycles = cycles[:MAX_REPORTED_CYCLES]
+        lines = [
+            f"Plain syntax error: Found more than {MAX_REPORTED_CYCLES} cycles in concept definitions. Cycles are not allowed.",
+            f"Showing the first {MAX_REPORTED_CYCLES}.",
+        ]
+    else:
+        lines = [f"Plain syntax error: Found {len(cycles)} cycle(s) in concept definitions. Cycles are not allowed."]
+    for number, cycle in enumerate(cycles, start=1):
+        lines.append("")
+        lines.append(f"Cycle {number}: " + " -> ".join(cycle + [cycle[0]]))
+        lines.extend(concept_definitions[concept]["markdown"] for concept in cycle)
+    return "\n".join(lines)
+
+
 def sort_definitions(definitions: list[dict]) -> list[dict]:
     if len(definitions) <= 1:
         return
 
     adjacency_list, concept_definitions = build_adjacency_list(definitions)
 
-    concept_graph = nx.DiGraph()
+    # adjacency_list maps a used concept to the concepts defined in terms of it,
+    # so the used concept is a predecessor of each of them
+    sorter: TopologicalSorter[str] = TopologicalSorter()
     for node, neighbors in adjacency_list.items():
+        sorter.add(node)
         for neighbour in neighbors:
-            concept_graph.add_edge(node, neighbour)
-        if not neighbors:
-            concept_graph.add_node(node)
+            sorter.add(neighbour, node)
 
-    if not nx.is_directed_acyclic_graph(concept_graph):
-        msg = "Found cycles in the concept graph. Cycles are not allowed. "
-        all_cycles = list(nx.simple_cycles(concept_graph))
+    try:
+        order = list(sorter.static_order())
+    except CycleError:
+        raise PlainSyntaxError(format_cycles_error(adjacency_list, concept_definitions)) from None
 
-        for cycle in all_cycles:
-            cyclic_definitions = []
-            cyclic_definitions.append(concept_definitions[cycle[0]]["markdown"])
-            cyclic_definitions.append(concept_definitions[cycle[1]]["markdown"])
-            msg += "Cyclic definitions:\n"
-            msg += "\n".join(cyclic_definitions)
-            msg += "\n"
-
-        raise PlainSyntaxError(f"Plain syntax error: {msg}")
-
-    order = list(nx.topological_sort(concept_graph))
     if len(order) > 0:
         definition_to_order_idx = {
             plain_spec.hash_text(str(concept_definitions[concept])): idx for idx, concept in enumerate(order)

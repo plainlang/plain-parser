@@ -670,8 +670,17 @@ def test_concept_validation_acceptance_tests(get_test_data_path):
 
 
 def test_concept_validation_cyclic_definitions(get_test_data_path):
-    with pytest.raises(PlainSyntaxError, match="cycles in the concept graph"):
+    with pytest.raises(PlainSyntaxError, match="cycle\\(s\\) in concept definitions"):
         plain_file.plain_file_parser("cyclic_definitions.plain", [get_test_data_path("data/plainfileparser")])
+
+
+def test_concept_validation_cyclic_definitions_reports_every_definition_on_the_cycle(get_test_data_path):
+    with pytest.raises(PlainSyntaxError) as exc_info:
+        plain_file.plain_file_parser("cyclic_definitions_long.plain", [get_test_data_path("data/plainfileparser")])
+    message = str(exc_info.value)
+    for definition in ("- :A: uses :B:.", "- :B: uses :C:.", "- :C: uses :A:."):
+        assert definition in message
+    assert "- :D: is on its own." not in message
 
 
 def test_required_concepts(get_test_data_path):
