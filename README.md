@@ -36,4 +36,4 @@ black . --check && isort . --check-only && flake8 . && mypy src
 
 ## License
 
-Apache 2.0, see [LICENSE](LICENSE).
+MIT, see [LICENSE](LICENSE).
