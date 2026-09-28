@@ -2,7 +2,7 @@
 
 Python parser for [`***plain`](https://www.plainlang.org/docs/) specification files.
 
-Reads a `.plain` module and its `import` / `requires` chain, resolves Liquid templates,
+Reads a `.plain`  module and its `import` / `requires` chain, resolves Liquid templates,
 validates concepts and linked resources, and returns the marshalled specification tree
 plus the ordered list of functionalities (FRIDs).
 
