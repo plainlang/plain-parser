@@ -43,6 +43,8 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         check(args.plain_file, args.template_dir)
+    except KeyboardInterrupt:
+        return 130
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
         return 1

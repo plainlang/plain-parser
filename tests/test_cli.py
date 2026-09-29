@@ -192,3 +192,17 @@ def test_check_binary_linked_resource_in_acceptance_test(cli_data_dir, capsys, m
     assert err.startswith(
         "Error: Referenced resource 'binary.bin' in module 'acceptance_test_binary_resource' is a binary file."
     )
+
+
+def test_check_interrupted_exits_130_without_traceback(cli_data_dir, capsys, monkeypatch):
+    def interrupt(*_):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(cli, "check", interrupt)
+
+    exit_code = cli.main(["check", os.path.join(cli_data_dir, "valid.plain")])
+
+    captured = capsys.readouterr()
+    assert exit_code == 130
+    assert captured.out == ""
+    assert "Traceback" not in captured.err
