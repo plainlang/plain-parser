@@ -161,3 +161,34 @@ def test_check_wrong_extension(cli_data_dir, capsys):
     assert exit_code == 1
     assert out == ""
     assert err == "Error: Plain syntax error: Invalid plain file extension: .md. Expected: .plain.\n"
+
+
+def test_check_empty_template_dir_is_ignored(tmp_path, capsys, monkeypatch):
+    # An empty --template-dir must not add the working directory to the search path (codeplain ignores it).
+    (tmp_path / "helper.plain").write_text(
+        "***implementation reqs***\n\n- A req.\n\n***functional specs***\n\n- A functionality.\n"
+    )
+    spec_dir = tmp_path / "spec"
+    spec_dir.mkdir()
+    (spec_dir / "top.plain").write_text(
+        "---\nrequires:\n  - helper\n---\n\n***implementation reqs***\n\n- A req.\n\n***functional specs***\n\n- A functionality.\n"
+    )
+    monkeypatch.chdir(tmp_path)
+
+    exit_code, out, err = _run_check(capsys, os.path.join("spec", "top.plain"), "--template-dir", "")
+
+    assert exit_code == 1
+    assert out == ""
+    assert err == "Error: Module does not exist (helper).\n"
+
+
+def test_check_binary_linked_resource_in_acceptance_test(cli_data_dir, capsys, monkeypatch):
+    monkeypatch.chdir(cli_data_dir)
+
+    exit_code, out, err = _run_check(capsys, "acceptance_test_binary_resource.plain")
+
+    assert exit_code == 1
+    assert out == ""
+    assert err.startswith(
+        "Error: Referenced resource 'binary.bin' in module 'acceptance_test_binary_resource' is a binary file."
+    )

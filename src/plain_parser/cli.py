@@ -23,7 +23,7 @@ def build_parser() -> argparse.ArgumentParser:
 def check(plain_file_path: str, template_dir: str | None) -> None:
     """Raise if the module, its requires chain, or its linked resources are invalid."""
     template_dirs = [os.path.dirname(os.path.abspath(plain_file_path))]
-    if template_dir is not None:
+    if template_dir:
         template_dirs.append(template_dir)
 
     chain = plain_file.parse_module_chain(os.path.basename(plain_file_path), template_dirs)

@@ -1,0 +1,10 @@
+***implementation reqs***
+
+- An implementation requirement.
+
+***functional specs***
+
+- A functionality.
+
+  ***acceptance tests***
+  - Behaves as described in [the binary](binary.bin).
