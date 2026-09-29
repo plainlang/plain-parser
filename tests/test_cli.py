@@ -199,11 +199,12 @@ def test_check_binary_linked_resource_in_acceptance_test(cli_data_dir, capsys, m
     )
 
 
-def test_check_interrupted_exits_130_without_traceback(cli_data_dir, capsys, monkeypatch):
+@pytest.mark.parametrize("interrupted_function", ["check", "resolve_config_file"])
+def test_check_interrupted_exits_130_without_traceback(cli_data_dir, capsys, monkeypatch, interrupted_function):
     def interrupt(*_):
         raise KeyboardInterrupt
 
-    monkeypatch.setattr(cli, "check", interrupt)
+    monkeypatch.setattr(cli, interrupted_function, interrupt)
 
     exit_code = cli.main(["check", os.path.join(cli_data_dir, "valid.plain")])
 

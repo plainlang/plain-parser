@@ -93,18 +93,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
-    template_dir = args.template_dir
-    if not template_dir:
-        try:
-            config_file = resolve_config_file(args.config_name, args.plain_file)
-            if config_file is not None:
-                template_dir = template_dir_from_config(config_file)
-        except AmbiguousConfigFileError as e:
-            parser.error(str(e))
-        except Exception as e:
-            parser.error(f"Error reading config file: {e}")
-
     try:
+        template_dir = args.template_dir or _template_dir_from_config(parser, args)
         check(args.plain_file, template_dir)
     except KeyboardInterrupt:
         return 130
@@ -114,3 +104,13 @@ def main(argv: list[str] | None = None) -> int:
 
     print(f"{args.plain_file}: OK")
     return 0
+
+
+def _template_dir_from_config(parser: argparse.ArgumentParser, args: argparse.Namespace) -> str | None:
+    try:
+        config_file = resolve_config_file(args.config_name, args.plain_file)
+        return template_dir_from_config(config_file) if config_file is not None else None
+    except AmbiguousConfigFileError as e:
+        parser.error(str(e))
+    except Exception as e:
+        parser.error(f"Error reading config file: {e}")
