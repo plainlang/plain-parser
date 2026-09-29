@@ -51,3 +51,113 @@ def test_console_script_is_installed_and_exits_zero(cli_data_dir):
     assert result.returncode == 0
     assert result.stdout == ""
     assert result.stderr == ""
+
+
+def _run_check(capsys, *argv):
+    exit_code = cli.main(["check", *argv])
+    captured = capsys.readouterr()
+    return exit_code, captured.out, captured.err
+
+
+def test_check_valid_module_in_subdirectory_from_parent(cli_data_dir, capsys, monkeypatch):
+    monkeypatch.chdir(cli_data_dir)
+
+    exit_code, out, err = _run_check(capsys, os.path.join("subdir", "nested.plain"))
+
+    assert (exit_code, out, err) == (0, "", "")
+
+
+def test_check_valid_module_with_linked_resource_in_acceptance_test(cli_data_dir, capsys, monkeypatch):
+    monkeypatch.chdir(cli_data_dir)
+
+    exit_code, out, err = _run_check(capsys, "acceptance_test_resource.plain")
+
+    assert (exit_code, out, err) == (0, "", "")
+
+
+def test_check_nonexistent_template_dir_is_ignored(cli_data_dir, capsys):
+    exit_code, out, err = _run_check(
+        capsys, os.path.join(cli_data_dir, "valid.plain"), "--template-dir", os.path.join(cli_data_dir, "nope")
+    )
+
+    assert (exit_code, out, err) == (0, "", "")
+
+
+def test_check_undefined_concept(cli_data_dir, capsys):
+    exit_code, out, err = _run_check(capsys, os.path.join(cli_data_dir, "undefined_concept.plain"))
+
+    assert exit_code == 1
+    assert out == ""
+    assert err.startswith("Error: Plain syntax error: Found 2 errors in the plain file:\n")
+    assert ":User:" in err
+    assert ":Visitor:" in err
+    assert "Traceback" not in err
+
+
+def test_check_missing_linked_resource(cli_data_dir, capsys, monkeypatch):
+    monkeypatch.chdir(cli_data_dir)
+
+    exit_code, out, err = _run_check(capsys, "missing_resource.plain")
+
+    assert exit_code == 1
+    assert out == ""
+    assert err == "Error: Plain syntax error: Link does_not_exist.md does not exist.\n"
+
+
+def test_check_binary_linked_resource(cli_data_dir, capsys, monkeypatch):
+    monkeypatch.chdir(cli_data_dir)
+
+    exit_code, out, err = _run_check(capsys, "binary_resource.plain")
+
+    assert exit_code == 1
+    assert out == ""
+    assert err.startswith("Error: Referenced resource 'binary.bin' in module 'binary_resource' is a binary file.")
+
+
+def test_check_base64_blob_linked_resource(cli_data_dir, capsys, monkeypatch):
+    monkeypatch.chdir(cli_data_dir)
+
+    exit_code, out, err = _run_check(capsys, "base64_resource.plain")
+
+    assert exit_code == 1
+    assert out == ""
+    assert err.startswith(
+        "Error: Referenced resource '../sample_base64_image.txt' in module 'base64_resource' "
+        "contains a large base64-encoded blob"
+    )
+
+
+def test_check_invalid_linked_resource_in_required_module(cli_data_dir, capsys, monkeypatch):
+    monkeypatch.chdir(cli_data_dir)
+
+    exit_code, out, err = _run_check(capsys, "requires_binary_resource_top.plain")
+
+    assert exit_code == 1
+    assert out == ""
+    assert err.startswith(
+        "Error: Referenced resource 'binary.bin' in module 'requires_binary_resource_base' is a binary file."
+    )
+
+
+def test_check_code_variable_with_two_values(cli_data_dir, capsys):
+    exit_code, out, err = _run_check(capsys, os.path.join(cli_data_dir, "code_variable_conflict.plain"))
+
+    assert exit_code == 1
+    assert out == ""
+    assert err == "Error: Code variable variable_name has multiple values: first and second\n"
+
+
+def test_check_missing_plain_file(cli_data_dir, capsys):
+    exit_code, out, err = _run_check(capsys, os.path.join(cli_data_dir, "does_not_exist.plain"))
+
+    assert exit_code == 1
+    assert out == ""
+    assert err == "Error: Module does not exist (does_not_exist).\n"
+
+
+def test_check_wrong_extension(cli_data_dir, capsys):
+    exit_code, out, err = _run_check(capsys, os.path.join(cli_data_dir, "not_plain.md"))
+
+    assert exit_code == 1
+    assert out == ""
+    assert err == "Error: Plain syntax error: Invalid plain file extension: .md. Expected: .plain.\n"
