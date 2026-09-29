@@ -1,0 +1,12 @@
+---
+requires:
+  - requires_binary_resource_base
+---
+
+***implementation reqs***
+
+- Top implementation requirement.
+
+***functional specs***
+
+- A top functionality.

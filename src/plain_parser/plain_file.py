@@ -701,11 +701,16 @@ def parse_plain_file(
 
 def process_required_modules(
     required_modules: list[str],
-    code_variables: dict,
     template_dirs: list[str],
     all_required_modules: list[str],
     modules_trace: list[str],
+    chain: list[tuple[str, dict]],
 ) -> list[mistletoe.block_token.token]:
+    """Parse and fully validate every required module, deepest first.
+
+    Appends ``(module name, marshalled plain source tree)`` to ``chain`` for each module not already in it
+    and returns the exported definitions of the directly required modules.
+    """
     exported_definitions = list[mistletoe.block_token.token]()
     for module_name in required_modules:
         if module_name in modules_trace:
@@ -714,10 +719,12 @@ def process_required_modules(
         if len(all_required_modules) > 0 and module_name == all_required_modules[-1]:
             continue
 
+        code_variables: dict = {}
         plain_file_parse_result = parse_plain_file(
             module_name, code_variables, template_dirs, imported_modules=[], modules_trace=[]
         )
 
+        ancestor_exported_definitions: list[mistletoe.block_token.token] = []
         if len(plain_file_parse_result.required_modules) == 0:
             if len(all_required_modules) > 0:
                 # For now we require that there is fixed order how required modules are dependent.
@@ -727,12 +734,12 @@ def process_required_modules(
                     f"Plain syntax error: There must be a fixed order how required modules are dependent ({module_name})."
                 )
         else:
-            process_required_modules(
+            ancestor_exported_definitions = process_required_modules(
                 plain_file_parse_result.required_modules,
-                code_variables,
                 template_dirs,
                 all_required_modules,
                 modules_trace + [module_name],
+                chain,
             )
 
         if EXPORTED_CONCEPTS_DIRECTIVE in plain_file_parse_result.plain_source_obj.metadata:
@@ -747,6 +754,12 @@ def process_required_modules(
                             exported_concept, plain_file_parse_result.plain_source, renderer
                         )
                     )
+
+        marshalled_plain_source = validate_and_marshall_module(
+            plain_file_parse_result, module_name, ancestor_exported_definitions, code_variables
+        )
+        if module_name not in (chain_module_name for chain_module_name, _ in chain):
+            chain.append((module_name, marshalled_plain_source))
 
         all_required_modules.append(module_name)
 
@@ -775,35 +788,13 @@ def process_exported_definitions(plain_source: dict, exported_definitions: list[
                 plain_source[plain_spec.DEFINITIONS].children.append(exported_definition)
 
 
-def plain_file_parser(  # noqa: C901
-    plain_source_file_name: str,
-    template_dirs: list[str],
-) -> tuple[str, dict, list[str]]:
-    # code_variables are used to pass code variables to the plain source
-    # they need to be passed as an argument to the function because they populated when liquid templating is applied
-    # and we need to pass them to the marshalled_plain_source_tree after it's rendered
-    plain_source_file_path = Path(plain_source_file_name)
-    if plain_source_file_path.suffix != PLAIN_SOURCE_FILE_EXTENSION:
-        raise PlainSyntaxError(
-            f"Plain syntax error: Invalid plain file extension: {plain_source_file_path.suffix}. Expected: {PLAIN_SOURCE_FILE_EXTENSION}."
-        )
-
-    module_name = (
-        plain_source_file_path.stem
-        if plain_source_file_path.is_absolute()
-        else plain_source_file_path.with_suffix("").as_posix()
-    )
-
-    code_variables = {}
-
-    plain_file_parse_result = parse_plain_file(
-        module_name,
-        code_variables,
-        template_dirs,
-        imported_modules=[],
-        modules_trace=[],
-    )
-
+def validate_and_marshall_module(
+    plain_file_parse_result: PlainFileParseResult,
+    module_name: str,
+    exported_definitions: list[mistletoe.block_token.token],
+    code_variables: dict,
+) -> dict:
+    """Every check a module must pass after parsing, and its marshalled plain source tree."""
     if len(plain_file_parse_result.required_concepts) > 0:
         missing_required_concepts_msg = "Missing required concepts: "
         missing_required_concepts_msg += ", ".join(plain_file_parse_result.required_concepts)
@@ -831,14 +822,6 @@ def plain_file_parser(  # noqa: C901
         has_requires=bool(plain_file_parse_result.required_modules),
     )
 
-    exported_definitions = process_required_modules(
-        plain_file_parse_result.required_modules,
-        code_variables={},
-        template_dirs=template_dirs,
-        all_required_modules=[],
-        modules_trace=[],
-    )
-
     process_exported_definitions(plain_file_parse_result.plain_source, exported_definitions)
 
     process_acceptance_tests(plain_file_parse_result.plain_source)
@@ -858,4 +841,64 @@ def plain_file_parser(  # noqa: C901
     if plain_spec.DEFINITIONS in marshalled_plain_source:
         concept_utils.sort_definitions(marshalled_plain_source[plain_spec.DEFINITIONS])
 
-    return module_name, marshalled_plain_source, plain_file_parse_result.required_modules
+    return marshalled_plain_source
+
+
+def _parse_module(
+    plain_source_file_name: str, template_dirs: list[str]
+) -> tuple[str, dict, list[str], list[tuple[str, dict]]]:
+    plain_source_file_path = Path(plain_source_file_name)
+    if plain_source_file_path.suffix != PLAIN_SOURCE_FILE_EXTENSION:
+        raise PlainSyntaxError(
+            f"Plain syntax error: Invalid plain file extension: {plain_source_file_path.suffix}. Expected: {PLAIN_SOURCE_FILE_EXTENSION}."
+        )
+
+    module_name = (
+        plain_source_file_path.stem
+        if plain_source_file_path.is_absolute()
+        else plain_source_file_path.with_suffix("").as_posix()
+    )
+
+    # code_variables are populated when liquid templating is applied and consumed by process_code_variables
+    # once the plain source is marshalled.
+    code_variables: dict = {}
+
+    plain_file_parse_result = parse_plain_file(
+        module_name,
+        code_variables,
+        template_dirs,
+        imported_modules=[],
+        modules_trace=[],
+    )
+
+    chain: list[tuple[str, dict]] = []
+    exported_definitions = process_required_modules(
+        plain_file_parse_result.required_modules,
+        template_dirs=template_dirs,
+        all_required_modules=[],
+        modules_trace=[],
+        chain=chain,
+    )
+
+    marshalled_plain_source = validate_and_marshall_module(
+        plain_file_parse_result, module_name, exported_definitions, code_variables
+    )
+
+    return module_name, marshalled_plain_source, plain_file_parse_result.required_modules, chain
+
+
+def plain_file_parser(plain_source_file_name: str, template_dirs: list[str]) -> tuple[str, dict, list[str]]:
+    """Parse a module, validating it and every module in its ``requires`` chain."""
+    module_name, marshalled_plain_source, required_modules, _ = _parse_module(plain_source_file_name, template_dirs)
+    return module_name, marshalled_plain_source, required_modules
+
+
+def parse_module_chain(plain_file_name: str, template_dirs: list[str]) -> list[tuple[str, dict]]:
+    """Parse a module and every module in its ``requires`` chain.
+
+    Returns ``(module name, marshalled plain source tree)`` pairs: every required module
+    first, deepest ancestors first, then the module itself. A module reached through more
+    than one ``requires`` path appears once, at its first (deepest) position.
+    """
+    module_name, marshalled_plain_source, _, chain = _parse_module(plain_file_name, template_dirs)
+    return chain + [(module_name, marshalled_plain_source)]

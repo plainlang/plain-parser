@@ -26,3 +26,35 @@ def test_circular_requires(get_test_data_path):
 
 def test_normal_requires(get_test_data_path):
     plain_file.plain_file_parser("normal_requires_main.plain", [get_test_data_path("data/requires")])
+
+
+def test_parse_module_chain_orders_required_modules_first(get_test_data_path):
+    chain = plain_file.parse_module_chain("chain_top.plain", [get_test_data_path("data/requires")])
+
+    assert [module_name for module_name, _ in chain] == ["chain_base", "chain_middle", "chain_top"]
+    for _, plain_source_tree in chain:
+        assert isinstance(plain_source_tree, dict)
+        assert "functional specs" in plain_source_tree
+
+
+def test_parse_module_chain_single_module(get_test_data_path):
+    chain = plain_file.parse_module_chain("chain_base.plain", [get_test_data_path("data/requires")])
+
+    assert [module_name for module_name, _ in chain] == ["chain_base"]
+
+
+def test_parse_module_chain_deduplicates_shared_ancestor(get_test_data_path):
+    chain = plain_file.parse_module_chain("chain_fork_top.plain", [get_test_data_path("data/requires")])
+
+    assert [module_name for module_name, _ in chain] == ["chain_base", "chain_middle", "chain_fork_top"]
+
+
+def test_parse_module_chain_propagates_required_module_errors(get_test_data_path):
+    with pytest.raises(ModuleDoesNotExistError, match="Module does not exist"):
+        plain_file.parse_module_chain("non_existent_require.plain", [get_test_data_path("data/requires")])
+
+
+def test_plain_file_parser_validates_required_modules(get_test_data_path):
+    # The ancestor is fully validated during the parse of the top module, not only when the chain is walked.
+    with pytest.raises(Exception, match="Concept :UndefinedThing: is not defined"):
+        plain_file.plain_file_parser("invalid_ancestor_top.plain", [get_test_data_path("data/requires")])
