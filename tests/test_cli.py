@@ -13,12 +13,11 @@ def cli_data_dir(get_test_data_path):
     return get_test_data_path("data/cli")
 
 
-def test_check_valid_module_exits_zero_and_prints_nothing(cli_data_dir, capsys):
+def test_check_valid_module_exits_zero(cli_data_dir, capsys):
     exit_code = cli.main(["check", os.path.join(cli_data_dir, "valid.plain")])
 
     captured = capsys.readouterr()
     assert exit_code == 0
-    assert captured.out == ""
     assert captured.err == ""
 
 
@@ -49,7 +48,7 @@ def test_console_script_is_installed_and_exits_zero(cli_data_dir):
     )
 
     assert result.returncode == 0
-    assert result.stdout == ""
+    assert result.stdout.endswith(": OK\n")
     assert result.stderr == ""
 
 
@@ -59,12 +58,18 @@ def _run_check(capsys, *argv):
     return exit_code, captured.out, captured.err
 
 
+def _assert_ok(result):
+    exit_code, out, err = result
+    assert (exit_code, err) == (0, "")
+    assert out.endswith(": OK\n"), out
+
+
 def test_check_valid_module_in_subdirectory_from_parent(cli_data_dir, capsys, monkeypatch):
     monkeypatch.chdir(cli_data_dir)
 
     exit_code, out, err = _run_check(capsys, os.path.join("subdir", "nested.plain"))
 
-    assert (exit_code, out, err) == (0, "", "")
+    _assert_ok((exit_code, out, err))
 
 
 def test_check_valid_module_with_linked_resource_in_acceptance_test(cli_data_dir, capsys, monkeypatch):
@@ -72,7 +77,7 @@ def test_check_valid_module_with_linked_resource_in_acceptance_test(cli_data_dir
 
     exit_code, out, err = _run_check(capsys, "acceptance_test_resource.plain")
 
-    assert (exit_code, out, err) == (0, "", "")
+    _assert_ok((exit_code, out, err))
 
 
 def test_check_nonexistent_template_dir_is_ignored(cli_data_dir, capsys):
@@ -80,7 +85,7 @@ def test_check_nonexistent_template_dir_is_ignored(cli_data_dir, capsys):
         capsys, os.path.join(cli_data_dir, "valid.plain"), "--template-dir", os.path.join(cli_data_dir, "nope")
     )
 
-    assert (exit_code, out, err) == (0, "", "")
+    _assert_ok((exit_code, out, err))
 
 
 def test_check_undefined_concept(cli_data_dir, capsys):
@@ -227,13 +232,13 @@ def test_check_reads_template_dir_from_config_next_to_spec(tmp_path, capsys, mon
     spec_dir = _project(tmp_path, "config.yaml", "template-dir: template\n")
     monkeypatch.chdir(tmp_path)  # not the spec dir: the relative value must resolve against the config file
 
-    assert _run_check(capsys, str(spec_dir / "top.plain")) == (0, "", "")
+    _assert_ok(_run_check(capsys, str(spec_dir / "top.plain")))
 
 
 def test_check_accepts_template_dir_key_with_underscore(tmp_path, capsys):
     spec_dir = _project(tmp_path, "config.yaml", "template_dir: template\n")
 
-    assert _run_check(capsys, str(spec_dir / "top.plain")) == (0, "", "")
+    _assert_ok(_run_check(capsys, str(spec_dir / "top.plain")))
 
 
 def test_check_ignores_other_config_keys(tmp_path, capsys):
@@ -243,7 +248,7 @@ def test_check_ignores_other_config_keys(tmp_path, capsys):
         "unittests-script: scripts/x.sh\nbuild-dest: dist\ntemplate-dir: template\nverbose: true\n",
     )
 
-    assert _run_check(capsys, str(spec_dir / "top.plain")) == (0, "", "")
+    _assert_ok(_run_check(capsys, str(spec_dir / "top.plain")))
 
 
 def test_check_without_config_does_not_search_template_dir(tmp_path, capsys):
@@ -257,14 +262,14 @@ def test_check_without_config_does_not_search_template_dir(tmp_path, capsys):
 def test_check_config_name_selects_config_file(tmp_path, capsys):
     spec_dir = _project(tmp_path, "web.config.yaml", "template-dir: template\n")
 
-    assert _run_check(capsys, str(spec_dir / "top.plain"), "--config-name", "web.config.yaml") == (0, "", "")
+    _assert_ok(_run_check(capsys, str(spec_dir / "top.plain"), "--config-name", "web.config.yaml"))
     assert _run_check(capsys, str(spec_dir / "top.plain"))[0] == 1
 
 
 def test_check_explicit_template_dir_overrides_config(tmp_path, capsys):
     spec_dir = _project(tmp_path, "config.yaml", "template-dir: does_not_exist\n")
 
-    assert _run_check(capsys, str(spec_dir / "top.plain"), "--template-dir", str(spec_dir / "template")) == (0, "", "")
+    _assert_ok(_run_check(capsys, str(spec_dir / "top.plain"), "--template-dir", str(spec_dir / "template")))
 
 
 def test_check_reads_config_from_working_directory(tmp_path, capsys, monkeypatch):
@@ -272,7 +277,7 @@ def test_check_reads_config_from_working_directory(tmp_path, capsys, monkeypatch
     (tmp_path / "config.yaml").write_text("template-dir: project/template\n")
     monkeypatch.chdir(tmp_path)
 
-    assert _run_check(capsys, os.path.join("project", "top.plain")) == (0, "", "")
+    _assert_ok(_run_check(capsys, os.path.join("project", "top.plain")))
 
 
 def test_check_config_in_both_locations_is_usage_error(tmp_path, capsys, monkeypatch):
@@ -295,3 +300,11 @@ def test_check_unreadable_config_is_usage_error(tmp_path, capsys):
 
     assert exc_info.value.code == 2
     assert "Error reading config file" in capsys.readouterr().err
+
+
+def test_check_valid_module_prints_ok_line_with_file_as_given(cli_data_dir, capsys, monkeypatch):
+    monkeypatch.chdir(cli_data_dir)
+
+    exit_code, out, err = _run_check(capsys, "valid.plain")
+
+    assert (exit_code, out, err) == (0, "valid.plain: OK\n", "")

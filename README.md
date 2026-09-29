@@ -14,7 +14,7 @@ pip install plain-parser
 
 ## Usage
 
-Validate a module and its `requires` chain from the command line (exit `0` when valid; `Error: …` on stderr and exit `1` otherwise):
+Validate a module and its `requires` chain from the command line (`<file>: OK` and exit `0` when valid; `Error: …` on stderr and exit `1` otherwise):
 
 ```bash
 plain-parser check my_spec.plain [--template-dir DIR] [--config-name NAME]

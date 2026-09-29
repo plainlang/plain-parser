@@ -112,4 +112,5 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Error: {e}", file=sys.stderr)
         return 1
 
+    print(f"{args.plain_file}: OK")
     return 0
