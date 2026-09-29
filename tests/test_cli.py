@@ -41,7 +41,9 @@ def test_console_script_is_installed_and_exits_zero(cli_data_dir):
     search_path = os.pathsep.join([os.path.dirname(sys.executable), os.environ.get("PATH", "")])
     script = shutil.which("plain-parser", path=search_path)
     if script is None:
-        pytest.skip("plain-parser console script not installed; run: uv pip install -e '.[dev]'")
+        message = "plain-parser console script not installed; run: uv pip install -e '.[dev]'"
+        # CI installs the package, so a missing script there means [project.scripts] is broken.
+        pytest.fail(message) if os.environ.get("CI") else pytest.skip(message)
 
     result = subprocess.run(
         [script, "check", os.path.join(cli_data_dir, "valid.plain")], capture_output=True, text=True

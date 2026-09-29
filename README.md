@@ -22,7 +22,9 @@ plain-parser check my_spec.plain [--template-dir DIR] [--config-name NAME]
 
 Modules and `{% include %}` templates are looked up in the `.plain` file's directory, then in `--template-dir`.
 When `--template-dir` is not given, it is read from the `template-dir` key of `config.yaml` (or the file named by
-`--config-name`), found next to the `.plain` file or in the working directory. Other config keys are ignored.
+`--config-name`), found next to the `.plain` file or in the working directory. Finding it in both is a usage error
+(exit `2`). The config file is read even when `--template-dir` is given, so a malformed one fails the run either way.
+Other config keys are ignored.
 
 Or from Python:
 
