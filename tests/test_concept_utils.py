@@ -143,6 +143,15 @@ def cycle_lines(message: str) -> list[str]:
     return [line for line in message.splitlines() if line.startswith("Cycle ")]
 
 
+def test_sort_reports_exactly_the_maximum_without_truncating():
+    with pytest.raises(PlainSyntaxError) as exc_info:
+        concept_utils.sort_definitions(definitions(*separate_two_cycles(10)))
+    message = str(exc_info.value)
+    assert "Found 10 cycle(s)" in message
+    assert "Showing" not in message
+    assert len(cycle_lines(message)) == 10
+
+
 def test_sort_truncated_report_shows_the_earliest_defined_cycles():
     with pytest.raises(PlainSyntaxError) as exc_info:
         concept_utils.sort_definitions(definitions(*separate_two_cycles(12)))
