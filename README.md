@@ -17,8 +17,12 @@ pip install plain-parser
 Validate a module and its `requires` chain from the command line (exit `0` when valid; `Error: …` on stderr and exit `1` otherwise):
 
 ```bash
-plain-parser check my_spec.plain [--template-dir DIR]
+plain-parser check my_spec.plain [--template-dir DIR] [--config-name NAME]
 ```
+
+Modules and `{% include %}` templates are looked up in the `.plain` file's directory, then in `--template-dir`.
+When `--template-dir` is not given, it is read from the `template-dir` key of `config.yaml` (or the file named by
+`--config-name`), found next to the `.plain` file or in the working directory. Other config keys are ignored.
 
 Or from Python:
 

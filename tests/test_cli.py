@@ -206,3 +206,92 @@ def test_check_interrupted_exits_130_without_traceback(cli_data_dir, capsys, mon
     assert exit_code == 130
     assert captured.out == ""
     assert "Traceback" not in captured.err
+
+
+_MODULE = "***implementation reqs***\n\n- A req.\n\n***functional specs***\n\n- A functionality.\n"
+_TOP = "---\nrequires:\n  - helper\n---\n\n" + _MODULE
+
+
+def _project(tmp_path, config_name=None, config_text=None, template_subdir="template"):
+    """A spec requiring ``helper``, which lives only in ``<spec dir>/<template_subdir>/``."""
+    spec_dir = tmp_path / "project"
+    (spec_dir / template_subdir).mkdir(parents=True)
+    (spec_dir / "top.plain").write_text(_TOP)
+    (spec_dir / template_subdir / "helper.plain").write_text(_MODULE)
+    if config_name is not None:
+        (spec_dir / config_name).write_text(config_text)
+    return spec_dir
+
+
+def test_check_reads_template_dir_from_config_next_to_spec(tmp_path, capsys, monkeypatch):
+    spec_dir = _project(tmp_path, "config.yaml", "template-dir: template\n")
+    monkeypatch.chdir(tmp_path)  # not the spec dir: the relative value must resolve against the config file
+
+    assert _run_check(capsys, str(spec_dir / "top.plain")) == (0, "", "")
+
+
+def test_check_accepts_template_dir_key_with_underscore(tmp_path, capsys):
+    spec_dir = _project(tmp_path, "config.yaml", "template_dir: template\n")
+
+    assert _run_check(capsys, str(spec_dir / "top.plain")) == (0, "", "")
+
+
+def test_check_ignores_other_config_keys(tmp_path, capsys):
+    spec_dir = _project(
+        tmp_path,
+        "config.yaml",
+        "unittests-script: scripts/x.sh\nbuild-dest: dist\ntemplate-dir: template\nverbose: true\n",
+    )
+
+    assert _run_check(capsys, str(spec_dir / "top.plain")) == (0, "", "")
+
+
+def test_check_without_config_does_not_search_template_dir(tmp_path, capsys):
+    spec_dir = _project(tmp_path)
+
+    exit_code, out, err = _run_check(capsys, str(spec_dir / "top.plain"))
+
+    assert (exit_code, out, err) == (1, "", "Error: Module does not exist (helper).\n")
+
+
+def test_check_config_name_selects_config_file(tmp_path, capsys):
+    spec_dir = _project(tmp_path, "web.config.yaml", "template-dir: template\n")
+
+    assert _run_check(capsys, str(spec_dir / "top.plain"), "--config-name", "web.config.yaml") == (0, "", "")
+    assert _run_check(capsys, str(spec_dir / "top.plain"))[0] == 1
+
+
+def test_check_explicit_template_dir_overrides_config(tmp_path, capsys):
+    spec_dir = _project(tmp_path, "config.yaml", "template-dir: does_not_exist\n")
+
+    assert _run_check(capsys, str(spec_dir / "top.plain"), "--template-dir", str(spec_dir / "template")) == (0, "", "")
+
+
+def test_check_reads_config_from_working_directory(tmp_path, capsys, monkeypatch):
+    spec_dir = _project(tmp_path)
+    (tmp_path / "config.yaml").write_text("template-dir: project/template\n")
+    monkeypatch.chdir(tmp_path)
+
+    assert _run_check(capsys, os.path.join("project", "top.plain")) == (0, "", "")
+
+
+def test_check_config_in_both_locations_is_usage_error(tmp_path, capsys, monkeypatch):
+    spec_dir = _project(tmp_path, "config.yaml", "template-dir: template\n")
+    (tmp_path / "config.yaml").write_text("template-dir: project/template\n")
+    monkeypatch.chdir(tmp_path)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli.main(["check", str(spec_dir / "top.plain")])
+
+    assert exc_info.value.code == 2
+    assert "found in two locations" in capsys.readouterr().err
+
+
+def test_check_unreadable_config_is_usage_error(tmp_path, capsys):
+    spec_dir = _project(tmp_path, "config.yaml", "template-dir: [unclosed\n")
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli.main(["check", str(spec_dir / "top.plain")])
+
+    assert exc_info.value.code == 2
+    assert "Error reading config file" in capsys.readouterr().err
