@@ -15,6 +15,7 @@ Both searches keep their own stack of frames instead of recursing, so the depth 
 tangle is not limited by Python's recursion limit.
 """
 
+import heapq
 from collections import defaultdict
 from collections.abc import Hashable, Iterable, Iterator, Mapping
 from typing import Optional, TypeVar
@@ -23,7 +24,8 @@ Node = TypeVar("Node", bound=Hashable)
 
 
 def _successors(graph: Mapping[Node, Iterable[Node]]) -> dict[Node, list[Node]]:
-    successors = {node: list(targets) for node, targets in graph.items()}
+    # a repeated edge would otherwise yield every cycle through it once per repeat
+    successors = {node: list(dict.fromkeys(targets)) for node, targets in graph.items()}
     for targets in list(successors.values()):
         for target in targets:
             successors.setdefault(target, [])
@@ -122,7 +124,8 @@ def _all_cycles(graph: Mapping[Node, Iterable[Node]]) -> Iterator[list[Node]]:
     """Johnson's main loop: every cycle lies inside one strongly connected component, and
     every cycle inside a component either passes through its least node or survives that
     node's removal. So search each component from its least node, drop the node, and split
-    what is left into components again."""
+    what is left into components again. Components are taken least node first, so a caller
+    that stops early has seen the cycles through the earliest nodes."""
     successors = _successors(graph)
     for node, targets in successors.items():
         if node in targets:
@@ -130,9 +133,17 @@ def _all_cycles(graph: Mapping[Node, Iterable[Node]]) -> Iterator[list[Node]]:
     successors = {node: [t for t in targets if t != node] for node, targets in successors.items()}
     position = {node: i for i, node in enumerate(successors)}
 
-    components = [c for c in strongly_connected_components(successors) if len(c) >= 2]
+    # components are disjoint, so no two entries share a least position and the sets are never compared
+    components: list[tuple[int, set[Node]]] = []
+
+    def push_components(adjacency: Mapping[Node, Iterable[Node]]) -> None:
+        for component in strongly_connected_components(adjacency):
+            if len(component) >= 2:
+                heapq.heappush(components, (min(map(position.__getitem__, component)), component))
+
+    push_components(successors)
     while components:
-        component = components.pop()
+        _, component = heapq.heappop(components)
         s = min(component, key=position.__getitem__)
         adjacency = {n: [t for t in successors[n] if t in component] for n in component}
         yield from _cycles_through(adjacency, s)
@@ -140,12 +151,13 @@ def _all_cycles(graph: Mapping[Node, Iterable[Node]]) -> Iterator[list[Node]]:
         for targets in adjacency.values():
             if s in targets:
                 targets.remove(s)
-        components.extend(c for c in strongly_connected_components(adjacency) if len(c) >= 2)
+        push_components(adjacency)
 
 
 def simple_cycles(graph: Mapping[Node, Iterable[Node]], limit: Optional[int] = None) -> Iterator[list[Node]]:
     """Yield the elementary cycles of `graph`, each as its nodes in edge order, stopping
-    after `limit` cycles when one is given."""
+    after `limit` cycles when one is given. Self-loops come first; longer cycles follow in
+    order of their earliest node in `graph`'s iteration order."""
     for found, cycle in enumerate(_all_cycles(graph), start=1):
         if limit is not None and found > limit:
             return

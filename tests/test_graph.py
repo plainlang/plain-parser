@@ -90,10 +90,23 @@ def test_acyclic_appendage_is_never_entered():
     assert canonical(graph.simple_cycles(g)) == {("a", "b")}
 
 
+def test_repeated_edge_yields_each_cycle_once():
+    assert list(graph.simple_cycles({"a": ["b", "b"], "b": ["a", "a"]})) == [["a", "b"]]
+
+
+def test_separate_cycles_come_in_graph_order():
+    g = {f"{name}{i}": [f"{name}{1 - i}"] for name in "pqrst" for i in range(2)}
+    assert [cycle[0][0] for cycle in graph.simple_cycles(g)] == list("pqrst")
+
+
 @pytest.mark.parametrize("seed", range(200))
 def test_matches_brute_force_on_random_graphs(seed):
     rng = random.Random(seed)
     n = rng.randint(1, 6)
     density = rng.choice([0.2, 0.4, 0.7, 1.0])
     adjacency = {u: [v for v in range(n) if rng.random() < density] for u in range(n)}
-    assert canonical(graph.simple_cycles(adjacency)) == brute_force_cycles(adjacency)
+    cycles = list(graph.simple_cycles(adjacency))
+    assert len(cycles) == len(canonical(cycles)), "a cycle was reported twice"
+    assert canonical(cycles) == brute_force_cycles(adjacency)
+    earliest = [min(cycle) for cycle in cycles if len(cycle) > 1]
+    assert earliest == sorted(earliest)

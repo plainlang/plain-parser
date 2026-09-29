@@ -199,7 +199,9 @@ def format_cycles_error(adjacency_list: dict[str, list[str]], concept_definition
     """
     position = {concept: index for index, concept in enumerate(concept_definitions)}
     cycles = []
-    for cycle in graph.simple_cycles(adjacency_list, limit=MAX_REPORTED_CYCLES + 1):
+    # key the graph in definition order so a search cut short by the limit has found the earliest cycles
+    by_position = {concept: adjacency_list[concept] for concept in [*concept_definitions, *adjacency_list]}
+    for cycle in graph.simple_cycles(by_position, limit=MAX_REPORTED_CYCLES + 1):
         # reverse since simple_cycles edges point from a used concept to the one defined with it
         cycle = cycle[::-1]
         first = min(range(len(cycle)), key=lambda i: position[cycle[i]])
@@ -217,7 +219,8 @@ def format_cycles_error(adjacency_list: dict[str, list[str]], concept_definition
     for number, cycle in enumerate(cycles, start=1):
         lines.append("")
         lines.append(f"Cycle {number}: " + " -> ".join(cycle + [cycle[0]]))
-        lines.extend(concept_definitions[concept]["markdown"] for concept in cycle)
+        # concepts defined on one line can share a cycle; print that line once
+        lines.extend(dict.fromkeys(concept_definitions[concept]["markdown"] for concept in cycle))
     return "\n".join(lines)
 
 

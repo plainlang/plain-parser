@@ -1,3 +1,5 @@
+import re
+
 import pytest
 
 from plain_parser import concept_utils
@@ -131,3 +133,38 @@ def test_sort_rejects_cycle_that_also_references_undefined_concept():
     defs = definitions("- :A: uses :B: and :Ghost:.", "- :B: uses :A:.")
     with pytest.raises(PlainSyntaxError, match="Cycles are not allowed"):
         concept_utils.sort_definitions(defs)
+
+
+def separate_two_cycles(count: int) -> list[str]:
+    return [line for i in range(count) for line in (f"- :A{i}: uses :B{i}:.", f"- :B{i}: uses :A{i}:.")]
+
+
+def cycle_lines(message: str) -> list[str]:
+    return [line for line in message.splitlines() if line.startswith("Cycle ")]
+
+
+def test_sort_truncated_report_shows_the_earliest_defined_cycles():
+    with pytest.raises(PlainSyntaxError) as exc_info:
+        concept_utils.sort_definitions(definitions(*separate_two_cycles(12)))
+    lines = cycle_lines(str(exc_info.value))
+    assert lines[0] == "Cycle 1: :A0: -> :B0: -> :A0:"
+    assert lines[-1] == "Cycle 10: :A9: -> :B9: -> :A9:"
+
+
+def test_sort_truncation_follows_definition_order_not_first_mention():
+    # :A10: and :A11: are mentioned on the first line but defined last, so their cycles are not among the first 10
+    defs = separate_two_cycles(12)
+    defs[0] = "- :A0: uses :B0:, :A10: and :A11:."
+    with pytest.raises(PlainSyntaxError) as exc_info:
+        concept_utils.sort_definitions(definitions(*defs))
+    lines = cycle_lines(str(exc_info.value))
+    assert lines[-1] == "Cycle 10: :A9: -> :B9: -> :A9:"
+    assert not [line for line in lines if re.search(r":A1[01]:", line)]
+
+
+def test_sort_prints_a_shared_definition_once_per_cycle():
+    defs = definitions("- :A:, :B: use :X: and :Y:.", "- :X: uses :B:.", "- :Y: uses :A:.")
+    with pytest.raises(PlainSyntaxError) as exc_info:
+        concept_utils.sort_definitions(defs)
+    blocks = str(exc_info.value).split("\n\n")[1:]
+    assert blocks and all(block.count("- :A:, :B: use :X: and :Y:.") == 1 for block in blocks)
