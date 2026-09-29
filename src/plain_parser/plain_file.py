@@ -88,7 +88,7 @@ def remove_quotes(token):
     token.children = tuple(new_children)
 
 
-def check_section_for_linked_resources(section):
+def check_section_for_linked_resources(section, template_dirs):
     linked_resources = []
     for link in traverse(section, klass=Link):
         parsed_url = urlparse(link.node.target)
@@ -97,11 +97,19 @@ def check_section_for_linked_resources(section):
                 f"Plain syntax error: Only relative links are allowed (text: {link.node.children[0].content}, target: {link.node.target})."
             )
 
-        if not os.path.exists(link.node.target):
-            raise PlainSyntaxError(f"Plain syntax error: Link {link.node.target} does not exist.")
+        resolved_target = loaders.resolve_linked_resource(template_dirs, link.node.target)
+        if resolved_target is None:
+            searched_dirs = "\n".join(f"  {position}. {dir}" for position, dir in enumerate(template_dirs, start=1))
+            raise PlainSyntaxError(
+                f"Plain syntax error: Link {link.node.target} does not exist. "
+                f"Linked resources are looked up relative to the following directories "
+                f"(highest to lowest precedence):\n{searched_dirs}"
+            )
 
-        if not os.path.isfile(link.node.target):
-            raise PlainSyntaxError(f"Plain syntax error: Link {link.node.target} must be a file.")
+        if not os.path.isfile(resolved_target):
+            raise PlainSyntaxError(
+                f"Plain syntax error: Link {link.node.target} must be a file (resolved to {resolved_target})."
+            )
 
         if len(link.node.children) != 1:
             raise PlainSyntaxError(f"Plain syntax error: Link must have text specified (link: {link.node.target}).")
@@ -120,15 +128,15 @@ def check_section_for_linked_resources(section):
         section.linked_resources = linked_resources
 
 
-def check_for_linked_resources(plain_source):
+def check_for_linked_resources(plain_source, template_dirs):
     for specification_heading in plain_spec.ALLOWED_SPECIFICATION_HEADINGS:
         if specification_heading in plain_source and hasattr(plain_source[specification_heading], "children"):
             for requirement in plain_source[specification_heading].children:
-                check_section_for_linked_resources(requirement)
+                check_section_for_linked_resources(requirement, template_dirs)
 
                 if hasattr(requirement, plain_spec.ACCEPTANCE_TESTS):
                     for acceptance_test in requirement.acceptance_tests:
-                        check_section_for_linked_resources(acceptance_test)
+                        check_section_for_linked_resources(acceptance_test, template_dirs)
 
 
 def process_section_code_variables(section, code_variables):
@@ -756,7 +764,7 @@ def process_required_modules(
                     )
 
         marshalled_plain_source = validate_and_marshall_module(
-            plain_file_parse_result, module_name, ancestor_exported_definitions, code_variables
+            plain_file_parse_result, module_name, ancestor_exported_definitions, code_variables, template_dirs
         )
         if module_name not in (chain_module_name for chain_module_name, _ in chain):
             chain.append((module_name, marshalled_plain_source))
@@ -793,6 +801,7 @@ def validate_and_marshall_module(
     module_name: str,
     exported_definitions: list[mistletoe.block_token.token],
     code_variables: dict,
+    template_dirs: list[str],
 ) -> dict:
     """Every check a module must pass after parsing, and its marshalled plain source tree."""
     if len(plain_file_parse_result.required_concepts) > 0:
@@ -826,7 +835,7 @@ def validate_and_marshall_module(
 
     process_acceptance_tests(plain_file_parse_result.plain_source)
 
-    check_for_linked_resources(plain_file_parse_result.plain_source)
+    check_for_linked_resources(plain_file_parse_result.plain_source, template_dirs)
 
     marshalled_plain_source = marshall_plain_source(plain_file_parse_result.plain_source)
 
@@ -881,7 +890,7 @@ def _parse_module(
     )
 
     marshalled_plain_source = validate_and_marshall_module(
-        plain_file_parse_result, module_name, exported_definitions, code_variables
+        plain_file_parse_result, module_name, exported_definitions, code_variables, template_dirs
     )
 
     return module_name, marshalled_plain_source, plain_file_parse_result.required_modules, chain

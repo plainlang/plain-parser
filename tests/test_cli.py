@@ -9,12 +9,12 @@ from plain_parser import cli
 
 
 @pytest.fixture
-def cli_data_dir(get_test_data_path):
+def cli_specs_dir(get_test_data_path):
     return get_test_data_path("data/cli")
 
 
-def test_check_valid_module_exits_zero(cli_data_dir, capsys):
-    exit_code = cli.main(["check", os.path.join(cli_data_dir, "valid.plain")])
+def test_check_valid_module_exits_zero(cli_specs_dir, capsys):
+    exit_code = cli.main(["check", os.path.join(cli_specs_dir, "valid.plain")])
 
     captured = capsys.readouterr()
     assert exit_code == 0
@@ -36,7 +36,7 @@ def test_without_subcommand_is_usage_error(capsys):
     assert exc_info.value.code == 2
 
 
-def test_console_script_is_installed_and_exits_zero(cli_data_dir):
+def test_console_script_is_installed_and_exits_zero(cli_specs_dir):
     # The venv's script dir may not be on PATH when pytest is run through an absolute interpreter path.
     search_path = os.pathsep.join([os.path.dirname(sys.executable), os.environ.get("PATH", "")])
     script = shutil.which("plain-parser", path=search_path)
@@ -46,7 +46,7 @@ def test_console_script_is_installed_and_exits_zero(cli_data_dir):
         pytest.fail(message) if os.environ.get("CI") else pytest.skip(message)
 
     result = subprocess.run(
-        [script, "check", os.path.join(cli_data_dir, "valid.plain")], capture_output=True, text=True
+        [script, "check", os.path.join(cli_specs_dir, "valid.plain")], capture_output=True, text=True
     )
 
     assert result.returncode == 0
@@ -66,32 +66,32 @@ def _assert_ok(result):
     assert out.endswith(": OK\n"), out
 
 
-def test_check_valid_module_in_subdirectory_from_parent(cli_data_dir, capsys, monkeypatch):
-    monkeypatch.chdir(cli_data_dir)
+def test_check_valid_module_in_subdirectory_from_parent(cli_specs_dir, capsys, monkeypatch):
+    monkeypatch.chdir(cli_specs_dir)
 
     exit_code, out, err = _run_check(capsys, os.path.join("subdir", "nested.plain"))
 
     _assert_ok((exit_code, out, err))
 
 
-def test_check_valid_module_with_linked_resource_in_acceptance_test(cli_data_dir, capsys, monkeypatch):
-    monkeypatch.chdir(cli_data_dir)
+def test_check_valid_module_with_linked_resource_in_acceptance_test(cli_specs_dir, capsys, monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
 
-    exit_code, out, err = _run_check(capsys, "acceptance_test_resource.plain")
+    exit_code, out, err = _run_check(capsys, os.path.join(cli_specs_dir, "acceptance_test_resource.plain"))
 
     _assert_ok((exit_code, out, err))
 
 
-def test_check_nonexistent_template_dir_is_ignored(cli_data_dir, capsys):
+def test_check_nonexistent_template_dir_is_ignored(cli_specs_dir, capsys):
     exit_code, out, err = _run_check(
-        capsys, os.path.join(cli_data_dir, "valid.plain"), "--template-dir", os.path.join(cli_data_dir, "nope")
+        capsys, os.path.join(cli_specs_dir, "valid.plain"), "--template-dir", os.path.join(cli_specs_dir, "nope")
     )
 
     _assert_ok((exit_code, out, err))
 
 
-def test_check_undefined_concept(cli_data_dir, capsys):
-    exit_code, out, err = _run_check(capsys, os.path.join(cli_data_dir, "undefined_concept.plain"))
+def test_check_undefined_concept(cli_specs_dir, capsys):
+    exit_code, out, err = _run_check(capsys, os.path.join(cli_specs_dir, "undefined_concept.plain"))
 
     assert exit_code == 1
     assert out == ""
@@ -101,30 +101,34 @@ def test_check_undefined_concept(cli_data_dir, capsys):
     assert "Traceback" not in err
 
 
-def test_check_missing_linked_resource(cli_data_dir, capsys, monkeypatch):
-    monkeypatch.chdir(cli_data_dir)
+def test_check_missing_linked_resource(cli_specs_dir, capsys, monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
 
-    exit_code, out, err = _run_check(capsys, "missing_resource.plain")
+    exit_code, out, err = _run_check(capsys, os.path.join(cli_specs_dir, "missing_resource.plain"))
 
     assert exit_code == 1
     assert out == ""
-    assert err == "Error: Plain syntax error: Link does_not_exist.md does not exist.\n"
+    assert err == (
+        "Error: Plain syntax error: Link does_not_exist.md does not exist. "
+        "Linked resources are looked up relative to the following directories (highest to lowest precedence):\n"
+        f"  1. {cli_specs_dir}\n"
+    )
 
 
-def test_check_binary_linked_resource(cli_data_dir, capsys, monkeypatch):
-    monkeypatch.chdir(cli_data_dir)
+def test_check_binary_linked_resource(cli_specs_dir, capsys, monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
 
-    exit_code, out, err = _run_check(capsys, "binary_resource.plain")
+    exit_code, out, err = _run_check(capsys, os.path.join(cli_specs_dir, "binary_resource.plain"))
 
     assert exit_code == 1
     assert out == ""
     assert err.startswith("Error: Referenced resource 'binary.bin' in module 'binary_resource' is a binary file.")
 
 
-def test_check_base64_blob_linked_resource(cli_data_dir, capsys, monkeypatch):
-    monkeypatch.chdir(cli_data_dir)
+def test_check_base64_blob_linked_resource(cli_specs_dir, capsys, monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
 
-    exit_code, out, err = _run_check(capsys, "base64_resource.plain")
+    exit_code, out, err = _run_check(capsys, os.path.join(cli_specs_dir, "base64_resource.plain"))
 
     assert exit_code == 1
     assert out == ""
@@ -134,10 +138,10 @@ def test_check_base64_blob_linked_resource(cli_data_dir, capsys, monkeypatch):
     )
 
 
-def test_check_invalid_linked_resource_in_required_module(cli_data_dir, capsys, monkeypatch):
-    monkeypatch.chdir(cli_data_dir)
+def test_check_invalid_linked_resource_in_required_module(cli_specs_dir, capsys, monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
 
-    exit_code, out, err = _run_check(capsys, "requires_binary_resource_top.plain")
+    exit_code, out, err = _run_check(capsys, os.path.join(cli_specs_dir, "requires_binary_resource_top.plain"))
 
     assert exit_code == 1
     assert out == ""
@@ -146,24 +150,24 @@ def test_check_invalid_linked_resource_in_required_module(cli_data_dir, capsys, 
     )
 
 
-def test_check_code_variable_with_two_values(cli_data_dir, capsys):
-    exit_code, out, err = _run_check(capsys, os.path.join(cli_data_dir, "code_variable_conflict.plain"))
+def test_check_code_variable_with_two_values(cli_specs_dir, capsys):
+    exit_code, out, err = _run_check(capsys, os.path.join(cli_specs_dir, "code_variable_conflict.plain"))
 
     assert exit_code == 1
     assert out == ""
     assert err == "Error: Code variable variable_name has multiple values: first and second\n"
 
 
-def test_check_missing_plain_file(cli_data_dir, capsys):
-    exit_code, out, err = _run_check(capsys, os.path.join(cli_data_dir, "does_not_exist.plain"))
+def test_check_missing_plain_file(cli_specs_dir, capsys):
+    exit_code, out, err = _run_check(capsys, os.path.join(cli_specs_dir, "does_not_exist.plain"))
 
     assert exit_code == 1
     assert out == ""
     assert err == "Error: Module does not exist (does_not_exist).\n"
 
 
-def test_check_wrong_extension(cli_data_dir, capsys):
-    exit_code, out, err = _run_check(capsys, os.path.join(cli_data_dir, "not_plain.md"))
+def test_check_wrong_extension(cli_specs_dir, capsys):
+    exit_code, out, err = _run_check(capsys, os.path.join(cli_specs_dir, "not_plain.md"))
 
     assert exit_code == 1
     assert out == ""
@@ -189,10 +193,10 @@ def test_check_empty_template_dir_is_ignored(tmp_path, capsys, monkeypatch):
     assert err == "Error: Module does not exist (helper).\n"
 
 
-def test_check_binary_linked_resource_in_acceptance_test(cli_data_dir, capsys, monkeypatch):
-    monkeypatch.chdir(cli_data_dir)
+def test_check_binary_linked_resource_in_acceptance_test(cli_specs_dir, capsys, monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
 
-    exit_code, out, err = _run_check(capsys, "acceptance_test_binary_resource.plain")
+    exit_code, out, err = _run_check(capsys, os.path.join(cli_specs_dir, "acceptance_test_binary_resource.plain"))
 
     assert exit_code == 1
     assert out == ""
@@ -202,13 +206,13 @@ def test_check_binary_linked_resource_in_acceptance_test(cli_data_dir, capsys, m
 
 
 @pytest.mark.parametrize("interrupted_function", ["check", "resolve_config_file"])
-def test_check_interrupted_exits_130_without_traceback(cli_data_dir, capsys, monkeypatch, interrupted_function):
+def test_check_interrupted_exits_130_without_traceback(cli_specs_dir, capsys, monkeypatch, interrupted_function):
     def interrupt(*_):
         raise KeyboardInterrupt
 
     monkeypatch.setattr(cli, interrupted_function, interrupt)
 
-    exit_code = cli.main(["check", os.path.join(cli_data_dir, "valid.plain")])
+    exit_code = cli.main(["check", os.path.join(cli_specs_dir, "valid.plain")])
 
     captured = capsys.readouterr()
     assert exit_code == 130
@@ -317,8 +321,8 @@ def test_check_unreadable_config_is_usage_error(tmp_path, capsys):
     assert "Error reading config file" in capsys.readouterr().err
 
 
-def test_check_valid_module_prints_ok_line_with_file_as_given(cli_data_dir, capsys, monkeypatch):
-    monkeypatch.chdir(cli_data_dir)
+def test_check_valid_module_prints_ok_line_with_file_as_given(cli_specs_dir, capsys, monkeypatch):
+    monkeypatch.chdir(cli_specs_dir)
 
     exit_code, out, err = _run_check(capsys, "valid.plain")
 
