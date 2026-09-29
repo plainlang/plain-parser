@@ -94,8 +94,9 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     try:
-        template_dir = args.template_dir or _template_dir_from_config(parser, args)
-        check(args.plain_file, template_dir)
+        # The config file is resolved even when --template-dir is given, so an ambiguous config is always an error.
+        config_template_dir = _template_dir_from_config(parser, args)
+        check(args.plain_file, args.template_dir or config_template_dir)
     except KeyboardInterrupt:
         return 130
     except Exception as e:

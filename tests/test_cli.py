@@ -293,6 +293,18 @@ def test_check_config_in_both_locations_is_usage_error(tmp_path, capsys, monkeyp
     assert "found in two locations" in capsys.readouterr().err
 
 
+def test_check_config_in_both_locations_is_usage_error_even_with_explicit_template_dir(tmp_path, capsys, monkeypatch):
+    spec_dir = _project(tmp_path, "config.yaml", "template-dir: template\n")
+    (tmp_path / "config.yaml").write_text("template-dir: project/template\n")
+    monkeypatch.chdir(tmp_path)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli.main(["check", str(spec_dir / "top.plain"), "--template-dir", str(spec_dir / "template")])
+
+    assert exc_info.value.code == 2
+    assert "found in two locations" in capsys.readouterr().err
+
+
 def test_check_unreadable_config_is_usage_error(tmp_path, capsys):
     spec_dir = _project(tmp_path, "config.yaml", "template-dir: [unclosed\n")
 
