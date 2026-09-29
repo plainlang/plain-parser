@@ -1,4 +1,5 @@
 import random
+import sys
 from itertools import permutations
 
 import pytest
@@ -94,9 +95,26 @@ def test_repeated_edge_yields_each_cycle_once():
     assert list(graph.simple_cycles({"a": ["b", "b"], "b": ["a", "a"]})) == [["a", "b"]]
 
 
+def test_limit_does_not_enumerate_the_rest():
+    # the complete graph on 14 nodes has billions of cycles; only a lazy search returns
+    k14 = {n: [m for m in range(14) if m != n] for n in range(14)}
+    assert len(list(graph.simple_cycles(k14, limit=11))) == 11
+
+
 def test_separate_cycles_come_in_graph_order():
     g = {f"{name}{i}": [f"{name}{1 - i}"] for name in "pqrst" for i in range(2)}
     assert [cycle[0][0] for cycle in graph.simple_cycles(g)] == list("pqrst")
+
+
+def test_cycle_longer_than_the_recursion_limit():
+    n = sys.getrecursionlimit() * 2
+    (cycle,) = list(graph.simple_cycles({i: [(i + 1) % n] for i in range(n)}))
+    assert len(cycle) == n
+
+
+def test_components_of_a_chain_longer_than_the_recursion_limit():
+    n = sys.getrecursionlimit() * 2
+    assert len(graph.strongly_connected_components({i: [i + 1] for i in range(n)})) == n + 1
 
 
 @pytest.mark.parametrize("seed", range(200))

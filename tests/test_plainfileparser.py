@@ -683,6 +683,37 @@ def test_concept_validation_cyclic_definitions_reports_every_definition_on_the_c
     assert "- :D: is on its own." not in message
 
 
+def test_concept_validation_cyclic_definitions_across_import(get_test_data_path):
+    with pytest.raises(PlainSyntaxError, match="Found 1 cycle") as exc_info:
+        plain_file.plain_file_parser(
+            "cyclic_definitions_across_import.plain", [get_test_data_path("data/plainfileparser")]
+        )
+    message = str(exc_info.value)
+    assert "- :DependantConcept: is a concept that depends on the :Concept: concept." in message
+    assert "- :Concept: is the concept that :DependantConcept: builds on." in message
+
+
+def test_concept_validation_cyclic_definitions_through_sub_bullet(get_test_data_path):
+    with pytest.raises(PlainSyntaxError) as exc_info:
+        plain_file.plain_file_parser(
+            "cyclic_definitions_sub_bullet.plain", [get_test_data_path("data/plainfileparser")]
+        )
+    message = str(exc_info.value)
+    assert "Cycle 1: :Order: -> :Customer: -> :Order:" in message
+    assert "- :Order: is a purchase.\n  - It is placed by a :Customer:." in message
+    assert ":Receipt:" not in message
+
+
+def test_topological_sort_across_import(get_test_data_path):
+    _, plain_source, _ = plain_file.plain_file_parser(
+        "required_concepts_module.plain", [get_test_data_path("data/plainfileparser")]
+    )
+    assert plain_source[plain_spec.DEFINITIONS] == [
+        {"markdown": "- :Concept: is a concept."},
+        {"markdown": "- :DependantConcept: is a concept that depends on the :Concept: concept."},
+    ]
+
+
 def test_required_concepts(get_test_data_path):
     plain_file.plain_file_parser(
         "required_concepts_example.plain",
