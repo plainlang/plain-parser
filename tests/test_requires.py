@@ -52,3 +52,9 @@ def test_parse_module_chain_deduplicates_shared_ancestor(get_test_data_path):
 def test_parse_module_chain_propagates_required_module_errors(get_test_data_path):
     with pytest.raises(ModuleDoesNotExistError, match="Module does not exist"):
         plain_file.parse_module_chain("non_existent_require.plain", [get_test_data_path("data/requires")])
+
+
+def test_plain_file_parser_validates_required_modules(get_test_data_path):
+    # The ancestor is fully validated during the parse of the top module, not only when the chain is walked.
+    with pytest.raises(Exception, match="Concept :UndefinedThing: is not defined"):
+        plain_file.plain_file_parser("invalid_ancestor_top.plain", [get_test_data_path("data/requires")])
