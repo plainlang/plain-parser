@@ -859,3 +859,24 @@ def plain_file_parser(  # noqa: C901
         concept_utils.sort_definitions(marshalled_plain_source[plain_spec.DEFINITIONS])
 
     return module_name, marshalled_plain_source, plain_file_parse_result.required_modules
+
+
+def parse_module_chain(plain_file_name: str, template_dirs: list[str]) -> list[tuple[str, dict]]:
+    """Parse a module and every module in its ``requires`` chain.
+
+    Returns ``(module name, marshalled plain source tree)`` pairs: every required module
+    first, deepest ancestors first, then the module itself. A module reached through more
+    than one ``requires`` path appears once, at its first (deepest) position.
+    """
+    module_name, plain_source_tree, required_module_names = plain_file_parser(plain_file_name, template_dirs)
+
+    chain: list[tuple[str, dict]] = []
+    seen = set[str]()
+    for required_module_name in required_module_names:
+        for entry in parse_module_chain(get_filename_from_module_name(required_module_name), template_dirs):
+            if entry[0] not in seen:
+                seen.add(entry[0])
+                chain.append(entry)
+
+    chain.append((module_name, plain_source_tree))
+    return chain
