@@ -32,6 +32,9 @@ dev = [
     "mypy==2.3.0",
 ]
 
+[project.scripts]
+plain-parser = "plain_parser.cli:main"
+
 [tool.hatch.version]
 source = "vcs"
 
