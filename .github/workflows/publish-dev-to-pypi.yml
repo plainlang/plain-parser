@@ -23,8 +23,18 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  pre-publish-checks:
+    name: Pre-publish checks
+    # Publishing is gated on the same checks PRs run: a red main must not
+    # ship. Running here rather than as a separate workflow is the only way
+    # to make the build job depend on the result.
+    uses: ./.github/workflows/lint-and-test.yml
+    permissions:
+      contents: read
+
   build:
     name: Build dev distribution
+    needs: pre-publish-checks
     runs-on: ubuntu-latest
     permissions:
       contents: read
