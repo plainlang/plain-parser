@@ -2,14 +2,15 @@ name: Code Quality & Tests
 
 on:
   # Pushes to PR branches are covered by pull_request; listening to every push
-  # too would run the suite twice per commit.
-  push:
-    branches: [main]
+  # too would run the suite twice per commit. Pushes to main are covered by
+  # the publish-dev-to-pypi workflow, which calls this one as a gate.
   pull_request:
   workflow_dispatch:
+  # Lets the publish workflows run these checks as a job and depend on it.
+  workflow_call:
 
 jobs:
-  check:
+  lint-and-test:
     name: Lint and test
     runs-on: ubuntu-latest
     steps:
