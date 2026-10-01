@@ -4,7 +4,7 @@ import tempfile
 import pytest
 
 from plain_parser.exceptions import UnsupportedBase64Content, UnsupportedResourceType
-from plain_parser.loaders import MAX_BASE64_BLOB_LENGTH, load_linked_resources
+from plain_parser.loaders import MAX_BASE64_BLOB_LENGTH, load_linked_resources, resolve_linked_resource
 
 
 @pytest.fixture
@@ -96,3 +96,44 @@ def test_get_loaded_templates_missing_include_names_template(template_dir):
     message = str(exc_info.value)
     assert "nope.plain" in message
     assert "--template-dir" not in message
+
+
+def test_resolve_linked_resource_returns_none_when_missing(template_dir):
+    assert resolve_linked_resource([template_dir], "missing.md") is None
+
+
+def test_resolve_linked_resource_first_dir_wins():
+    with tempfile.TemporaryDirectory() as first, tempfile.TemporaryDirectory() as second:
+        for d in (first, second):
+            with open(os.path.join(d, "notes.md"), "w") as f:
+                f.write("x")
+
+        assert resolve_linked_resource([first, second], "notes.md") == os.path.join(first, "notes.md")
+
+
+def test_resolve_linked_resource_falls_back_to_later_dir():
+    with tempfile.TemporaryDirectory() as first, tempfile.TemporaryDirectory() as second:
+        with open(os.path.join(second, "notes.md"), "w") as f:
+            f.write("x")
+
+        assert resolve_linked_resource([first, second], "notes.md") == os.path.join(second, "notes.md")
+
+
+def test_resolve_linked_resource_parent_relative_path():
+    with tempfile.TemporaryDirectory() as root:
+        spec_dir = os.path.join(root, "plain")
+        os.mkdir(spec_dir)
+        with open(os.path.join(root, "shared.md"), "w") as f:
+            f.write("x")
+
+        assert resolve_linked_resource([spec_dir], "../shared.md") == os.path.join(spec_dir, "../shared.md")
+
+
+def test_resolve_linked_resource_directory_in_first_dir_shadows_file_in_second():
+    # Parity with codeplain: existence, not file-ness, decides the match.
+    with tempfile.TemporaryDirectory() as first, tempfile.TemporaryDirectory() as second:
+        os.mkdir(os.path.join(first, "notes.md"))
+        with open(os.path.join(second, "notes.md"), "w") as f:
+            f.write("x")
+
+        assert resolve_linked_resource([first, second], "notes.md") == os.path.join(first, "notes.md")
