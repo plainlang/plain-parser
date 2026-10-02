@@ -126,7 +126,7 @@ def collect_linked_resources(
 ):
 
     if not isinstance(plain_source_tree, dict):
-        raise ValueError("[plain_source_tree must be a dictionary.")
+        raise ValueError("plain_source_tree must be a dictionary.")
 
     if frid is not None:
         functional_requirements = get_frids(plain_source_tree)
