@@ -1,4 +1,5 @@
 import os
+import re
 import tempfile
 
 import pytest
@@ -137,3 +138,47 @@ def test_resolve_linked_resource_directory_in_first_dir_shadows_file_in_second()
             f.write("x")
 
         assert resolve_linked_resource([first, second], "notes.md") == os.path.join(first, "notes.md")
+
+
+def _load_template_fixture(name):
+    path = os.path.join(os.path.dirname(__file__), "data", "templates", f"{name}.plain")
+    with open(path, encoding="utf-8") as f:
+        return os.path.dirname(path), f.read()
+
+
+def test_get_loaded_templates_malformed_tag_raises_plain_syntax_error():
+    from plain_parser.exceptions import PlainSyntaxError
+    from plain_parser.loaders import get_loaded_templates
+
+    directory, source = _load_template_fixture("malformed_tag")
+
+    with pytest.raises(
+        PlainSyntaxError,
+        match=re.escape("Plain syntax error: Invalid Liquid at malformed_tag:3:0: "),
+    ):
+        get_loaded_templates([directory], source, "malformed_tag")
+
+
+def test_get_loaded_templates_unterminated_output_raises_plain_syntax_error():
+    from plain_parser.exceptions import PlainSyntaxError
+    from plain_parser.loaders import get_loaded_templates
+
+    directory, source = _load_template_fixture("unterminated_output")
+
+    with pytest.raises(
+        PlainSyntaxError,
+        match=re.escape("Plain syntax error: Invalid Liquid at unterminated_output:4:0: "),
+    ):
+        get_loaded_templates([directory], source, "unterminated_output")
+
+
+def test_liquid_error_message_without_position():
+    from liquid2.exceptions import LiquidSyntaxError
+
+    from plain_parser.loaders import liquid_error_message
+
+    error = LiquidSyntaxError("missing expression", token=None, template_name="header")
+    assert liquid_error_message(error) == "Plain syntax error: Invalid Liquid in header: missing expression"
+
+    error = LiquidSyntaxError("missing expression", token=None)
+    assert liquid_error_message(error) == "Plain syntax error: Invalid Liquid: missing expression"

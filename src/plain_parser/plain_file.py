@@ -508,6 +508,7 @@ def parse_plain_source(  # noqa: C901
     template_dirs: list[str],
     imported_modules: list[str],
     modules_trace: list[str],
+    module_name: str | None = None,
 ) -> PlainFileParseResult:
     plain_source_text = normalize_line_endings(plain_source_text)
 
@@ -527,7 +528,7 @@ def parse_plain_source(  # noqa: C901
     else:
         required_concepts = list[str]()
 
-    [_, loaded_templates] = loaders.get_loaded_templates(template_dirs, plain_source_text)
+    [_, loaded_templates] = loaders.get_loaded_templates(template_dirs, plain_source_text, module_name)
 
     plain_source_content = restore_stripped_lines(plain_source_text, plain_source_obj.content)
 
@@ -704,6 +705,7 @@ def parse_plain_file(
         template_dirs,
         imported_modules,
         modules_trace + [module_name],
+        module_name=module_name,
     )
 
 
