@@ -602,7 +602,7 @@ def test_concept_validation_definitions(get_test_data_path):
         [get_test_data_path("data/plainfileparser")],
     )
 
-    with pytest.raises(PlainSyntaxError):
+    with pytest.raises(PlainSyntaxError, match=re.escape("Invalid definition specification text")):
         plain_file.plain_file_parser(
             "concept_validation_noconcepts.plain",
             [get_test_data_path("data/plainfileparser")],
@@ -635,7 +635,7 @@ def test_concept_validation_usage(get_test_data_path):
 
 
 def test_concept_validation_redefinition(get_test_data_path):
-    with pytest.raises(PlainSyntaxError):
+    with pytest.raises(PlainSyntaxError, match=re.escape("Concepts were defined multiple times")):
         plain_file.plain_file_parser(
             "concept_validation_redefinition.plain",
             [get_test_data_path("data/plainfileparser")],
