@@ -240,7 +240,7 @@ def _is_acceptance_test_heading(token) -> tuple[bool, str | None]:
     content = strong_children[0].content.strip()
     if content == plain_spec.ACCEPTANCE_TEST_HEADING:
         return True, None
-    problem = f"Syntax error at line {token.line_number}: Invalid acceptance test heading (`{content}`). Expected: `{plain_spec.ACCEPTANCE_TEST_HEADING}.`"
+    problem = f"Syntax error at line {token.line_number}: Invalid acceptance test heading (`{content}`). Expected: `{plain_spec.ACCEPTANCE_TEST_HEADING}`."
     return False, problem
 
 
@@ -585,7 +585,7 @@ def parse_plain_source(  # noqa: C901
 
             if specification_heading == plain_spec.DEFINITIONS and current_specification_heading is not None:
                 raise PlainSyntaxError(
-                    f"Plain syntax error: Syntax error at line {token.line_number}: Definitions specification must be the first specification in the section  (`{token_text}`)"
+                    f"Plain syntax error: Syntax error at line {token.line_number}: Definitions specification must be the first specification in the section (`{token_text}`)"
                 )
 
             current_specification_heading = specification_heading
@@ -602,7 +602,7 @@ def parse_plain_source(  # noqa: C901
 
         else:
             raise PlainSyntaxError(
-                f"Plain syntax error: Syntax error at line {token.line_number}: Invalid source structure  (`{token_text}`)"
+                f"Plain syntax error: Syntax error at line {token.line_number}: Invalid source structure (`{token_text}`)"
             )
 
     # Acceptance tests are only allowed nested under functional specs. Reject them when
@@ -681,8 +681,8 @@ def read_module_plain_source(module_name: str, template_dirs: list[str]) -> str:
     if blob is not None:
         raise UnsupportedBase64Content(
             f"Module '{module_name}' contains a base64-encoded blob ({len(blob)} characters) "
-            "inlined in the specification. This is not supported."
-            "Remove the base64 data from the .plain file or if necessary,"
+            "inlined in the specification. This is not supported. "
+            "Remove the base64 data from the .plain file or if necessary, "
             "include the binary file path in the specification."
         )
 

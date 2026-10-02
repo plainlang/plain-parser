@@ -200,14 +200,14 @@ def sort_definitions(definitions: list[dict]) -> list[dict]:
             concept_graph.add_node(node)
 
     if not nx.is_directed_acyclic_graph(concept_graph):
-        msg = "Found cycles in the concept graph. Cycles are not allowed."
+        msg = "Found cycles in the concept graph. Cycles are not allowed. "
         all_cycles = list(nx.simple_cycles(concept_graph))
 
         for cycle in all_cycles:
             cyclic_definitions = []
             cyclic_definitions.append(concept_definitions[cycle[0]]["markdown"])
             cyclic_definitions.append(concept_definitions[cycle[1]]["markdown"])
-            msg += "Cyclic definitons:\n"
+            msg += "Cyclic definitions:\n"
             msg += "\n".join(cyclic_definitions)
             msg += "\n"
 

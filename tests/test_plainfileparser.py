@@ -62,7 +62,7 @@ code block
 """
     with pytest.raises(
         Exception,
-        match=re.escape("Syntax error at line 3: Invalid source structure  (`code block`)"),
+        match=re.escape("Syntax error at line 3: Invalid source structure (`code block`)"),
     ):
         plain_file.parse_plain_source(plain_source, {}, [], [], [])
 
