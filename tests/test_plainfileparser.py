@@ -771,3 +771,11 @@ def test_topological_sort(get_test_data_path):
         {"markdown": "- :Concept4: is a concept that depends on the :Concept3: concept."},
         {"markdown": "- :Concept6: is a concept that depends on the :Concept1: and :Concept4: concepts."},
     ]
+
+
+def test_liquid_syntax_error_names_module(get_test_data_path):
+    with pytest.raises(
+        PlainSyntaxError,
+        match=re.escape("Plain syntax error: Invalid Liquid at unterminated_output:4:0: "),
+    ):
+        plain_file.plain_file_parser("unterminated_output.plain", [get_test_data_path("data/templates")])

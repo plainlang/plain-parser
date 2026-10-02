@@ -3,10 +3,10 @@ import re
 from typing import Optional
 
 from liquid2 import Environment, FileSystemLoader, StrictUndefined
-from liquid2.exceptions import UndefinedError
+from liquid2.exceptions import LiquidSyntaxError, UndefinedError
 
 from plain_parser import plain_spec
-from plain_parser.exceptions import UnsupportedBase64Content, UnsupportedResourceType
+from plain_parser.exceptions import PlainSyntaxError, UnsupportedBase64Content, UnsupportedResourceType
 from plain_parser.liquid_nodes import Plain2CodeIncludeTag, Plain2CodeLoaderMixin
 
 MAX_BASE64_BLOB_LENGTH = 8192
@@ -95,7 +95,20 @@ class TrackingFileSystemLoader(Plain2CodeLoaderMixin, FileSystemLoader):
         return source
 
 
-def get_loaded_templates(source_path, plain_source):
+def liquid_error_message(error: LiquidSyntaxError) -> str:
+    # Built from attributes: str() of some liquid2 syntax errors (e.g. an unterminated `{{ x`) raises ValueError.
+    template_name = error.template_name or None
+    token = error.token
+    if token is None or token.start < 0:
+        where = f" in {template_name}" if template_name else ""
+    else:
+        line = token.source[: token.start].count("\n") + 1
+        column = token.start - (token.source.rfind("\n", 0, token.start) + 1)
+        where = f" at {template_name}:{line}:{column}" if template_name else f" at {line}:{column}"
+    return f"Plain syntax error: Invalid Liquid{where}: {error.message}"
+
+
+def get_loaded_templates(source_path, plain_source, template_name=None):
     # Render the plain source with Liquid templating engine
     # to identify the templates that are being loaded
 
@@ -106,9 +119,11 @@ def get_loaded_templates(source_path, plain_source):
     liquid_env.filters["code_variable"] = plain_spec.code_variable_liquid_filter
     liquid_env.filters["prohibited_chars"] = plain_spec.prohibited_chars_liquid_filter
 
-    plain_source_template = liquid_env.from_string(plain_source)
     try:
+        plain_source_template = liquid_env.from_string(plain_source, name=template_name or "")
         plain_source = plain_source_template.render()
+    except LiquidSyntaxError as e:
+        raise PlainSyntaxError(liquid_error_message(e))
     except UndefinedError as e:
         raise Exception(f"Undefined liquid variable: {str(e)}")
 
