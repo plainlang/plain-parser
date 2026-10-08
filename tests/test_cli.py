@@ -1,3 +1,6 @@
+import contextlib
+import io
+import json
 import os
 import shutil
 import subprocess
@@ -6,7 +9,6 @@ import sys
 import pytest
 
 from plain_parser import cli, plain_file
-from plain_parser.exceptions import PlainSyntaxError, UnsupportedResourceType
 
 
 @pytest.fixture
@@ -114,6 +116,20 @@ def test_check_missing_linked_resource(cli_specs_dir, capsys, monkeypatch, tmp_p
         "Linked resources are looked up relative to the following directories (highest to lowest precedence):\n"
         f"  1. {cli_specs_dir}\n"
     )
+
+
+def test_check_missing_linked_resource_lists_relative_template_dir_as_absolute(
+    cli_specs_dir, capsys, monkeypatch, tmp_path
+):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "tpl").mkdir()
+
+    exit_code, _, err = _run_check(
+        capsys, os.path.join(cli_specs_dir, "missing_resource.plain"), "--template-dir", "tpl"
+    )
+
+    assert exit_code == 1
+    assert err.endswith(f"  1. {cli_specs_dir}\n  2. {os.path.join(os.getcwd(), 'tpl')}\n")
 
 
 def test_check_binary_linked_resource(cli_specs_dir, capsys, monkeypatch, tmp_path):
@@ -345,6 +361,56 @@ def requires_specs_dir(get_test_data_path):
     return get_test_data_path("data/requires")
 
 
+def _run_parse(capsys, *argv):
+    exit_code = cli.main(["parse", *argv])
+    captured = capsys.readouterr()
+    return exit_code, captured.out, captured.err
+
+
+def _parse_output(out):
+    # The whole of stdout must be one JSON document followed by one newline.
+    assert out.endswith("\n") and not out.endswith("\n\n"), repr(out[-20:])
+    return json.loads(out)
+
+
+def _module_names(result: dict) -> list[str]:
+    return [module["module"] for module in result["modules"]]
+
+
+def test_parse_valid_module_prints_success_json(cli_specs_dir, capsys):
+    exit_code, out, err = _run_parse(capsys, os.path.join(cli_specs_dir, "valid.plain"))
+
+    assert (exit_code, err) == (0, "")
+    result = _parse_output(out)
+    assert set(result) == {"format_version", "modules", "resources"}
+    assert result["format_version"] == 1
+    assert result["resources"] == {}
+    _, tree = plain_file.parse_module_chain("valid.plain", [cli_specs_dir])[-1]
+    assert result["modules"] == [{"module": "valid", "tree": json.loads(json.dumps(tree))}]
+
+
+def test_parse_invalid_module_prints_error_json(cli_specs_dir, capsys):
+    spec = os.path.join(cli_specs_dir, "undefined_concept.plain")
+
+    exit_code, out, err = _run_parse(capsys, spec)
+
+    assert (exit_code, err) == (1, "")
+    result = _parse_output(out)
+    assert set(result) == {"format_version", "type", "message"}
+    assert result["format_version"] == 1
+    assert result["type"] == "PlainSyntaxError"
+    _, _, check_err = _run_check(capsys, spec)
+    assert check_err == f"Error: {result['message']}\n"
+
+
+def test_parse_reports_an_error_only_the_frid_walk_finds(cli_specs_dir, capsys):
+    # The two values of variable_name are only compared while walking the functional specs.
+    exit_code, out, _ = _run_parse(capsys, os.path.join(cli_specs_dir, "code_variable_conflict.plain"))
+
+    assert exit_code == 1
+    assert _parse_output(out)["message"] == "Code variable variable_name has multiple values: first and second"
+
+
 @pytest.mark.parametrize(
     "entry, expected_chain",
     [
@@ -353,29 +419,251 @@ def requires_specs_dir(get_test_data_path):
         ("chain_fork_top.plain", ["chain_base", "chain_middle", "chain_fork_top"]),
     ],
 )
-def test_parse_spec_chain_is_deepest_ancestor_first(requires_specs_dir, entry, expected_chain):
-    result = cli.parse_spec(os.path.join(requires_specs_dir, entry), None, load_resources=False)
+def test_parse_prints_every_module_of_the_chain_deepest_ancestor_first(
+    requires_specs_dir, capsys, entry, expected_chain
+):
+    exit_code, out, _ = _run_parse(capsys, os.path.join(requires_specs_dir, entry))
 
-    assert result.chain == expected_chain
-
-
-def test_parse_spec_tree_is_the_entry_module_tree(requires_specs_dir):
-    result = cli.parse_spec(os.path.join(requires_specs_dir, "chain_top.plain"), None, load_resources=False)
-
-    _, entry_tree = plain_file.parse_module_chain("chain_top.plain", [requires_specs_dir])[-1]
-    assert result.tree == entry_tree
-
-
-def test_parse_spec_raises_on_diverging_requires(requires_specs_dir):
-    with pytest.raises(PlainSyntaxError, match="There must be a fixed order how required modules are dependent"):
-        cli.parse_spec(os.path.join(requires_specs_dir, "diamond_requires_main.plain"), None, load_resources=False)
+    assert exit_code == 0
+    chain = plain_file.parse_module_chain(entry, [requires_specs_dir])
+    expected_modules = [{"module": name, "tree": json.loads(json.dumps(tree))} for name, tree in chain]
+    assert [module["module"] for module in expected_modules] == expected_chain
+    assert _parse_output(out)["modules"] == expected_modules
 
 
-def test_parse_spec_loads_resources_only_when_asked(cli_specs_dir):
-    spec = os.path.join(cli_specs_dir, "binary_resource.plain")
+def test_parse_diverging_requires_is_parser_error(requires_specs_dir, capsys):
+    exit_code, out, _ = _run_parse(capsys, os.path.join(requires_specs_dir, "diamond_requires_main.plain"))
 
-    with pytest.raises(UnsupportedResourceType):
-        cli.parse_spec(spec, None, load_resources=True)
+    assert exit_code == 1
+    assert _parse_output(out)["type"] == "PlainSyntaxError"
 
-    result = cli.parse_spec(spec, None, load_resources=False)
-    assert result.resources == {"binary.bin": os.path.join(os.path.abspath(cli_specs_dir), "binary.bin")}
+
+def _write_module(path, body="", requires=None):
+    front = "---\nrequires:\n" + "".join(f"  - {name}\n" for name in requires) + "---\n\n" if requires else ""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        front + "***implementation reqs***\n\n- A req.\n\n***functional specs***\n\n- A functionality." + body
+    )
+
+
+def test_parse_resolves_link_from_template_dir(cli_specs_dir, capsys):
+    # template_link/spec/top.plain links notes.md, which exists only in template_link/tpl.
+    template_dir = os.path.join(cli_specs_dir, "template_link", "tpl")
+
+    exit_code, out, _ = _run_parse(
+        capsys, os.path.join(cli_specs_dir, "template_link", "spec", "top.plain"), "--template-dir", template_dir
+    )
+
+    assert exit_code == 0
+    assert _parse_output(out)["resources"] == {"notes.md": os.path.join(os.path.abspath(template_dir), "notes.md")}
+
+
+@pytest.mark.parametrize("entry", ["binary_resource.plain", "requires_binary_resource_top.plain"])
+def test_parse_accepts_binary_resource_that_check_rejects(cli_specs_dir, capsys, entry):
+    spec = os.path.join(cli_specs_dir, entry)
+
+    exit_code, out, _ = _run_parse(capsys, spec)
+    assert exit_code == 0
+    assert _parse_output(out)["resources"] == {"binary.bin": os.path.join(os.path.abspath(cli_specs_dir), "binary.bin")}
+
+    check_exit_code, _, check_err = _run_check(capsys, spec)
+    assert check_exit_code == 1
+    assert "'binary.bin'" in check_err and "is a binary file" in check_err
+
+
+def test_parse_lists_a_target_linked_from_two_modules_once(cli_specs_dir, capsys):
+    # shared_link_top.plain and the shared_link_helper.plain it requires both link notes.md.
+    exit_code, out, _ = _run_parse(capsys, os.path.join(cli_specs_dir, "shared_link_top.plain"))
+
+    assert exit_code == 0
+    result = _parse_output(out)
+    assert _module_names(result) == ["shared_link_helper", "shared_link_top"]
+    assert result["resources"] == {"notes.md": os.path.join(os.path.abspath(cli_specs_dir), "notes.md")}
+
+
+def test_parse_without_file_argument_is_usage_error(capsys):
+    with pytest.raises(SystemExit) as exc_info:
+        cli.main(["parse"])
+
+    captured = capsys.readouterr()
+    assert exc_info.value.code == 2
+    assert captured.out == ""
+    assert "usage:" in captured.err
+
+
+def test_parse_config_in_both_locations_is_usage_error(tmp_path, capsys, monkeypatch):
+    spec_dir = _project(tmp_path, "config.yaml", "template-dir: template\n")
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "config.yaml").write_text("template-dir: template\n")
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli.main(["parse", str(spec_dir / "top.plain")])
+
+    assert exc_info.value.code == 2
+    assert capsys.readouterr().out == ""
+
+
+def test_parse_writes_utf8_json_whatever_the_stdout_encoding(tmp_path):
+    _write_module(tmp_path / "unicode.plain", " It greets “Zoë” with ✓.\n")
+
+    result = subprocess.run(
+        [sys.executable, "-c", "import sys; from plain_parser import cli; sys.exit(cli.main(sys.argv[1:]))"]
+        + ["parse", str(tmp_path / "unicode.plain")],
+        capture_output=True,
+        env={**os.environ, "PYTHONIOENCODING": "ascii"},
+    )
+
+    assert (result.returncode, result.stderr) == (0, b"")
+    assert "“Zoë” with ✓" in json.dumps(json.loads(result.stdout.decode("utf-8")), ensure_ascii=False)
+
+
+def test_parse_to_a_closed_pipe_keeps_the_exit_code_and_prints_no_error(cli_specs_dir):
+    read_end, write_end = os.pipe()
+    os.close(read_end)  # Closed before the child starts, so its first write fails with a broken pipe.
+    try:
+        result = subprocess.run(
+            [sys.executable, "-c", "import sys; from plain_parser import cli; sys.exit(cli.main(sys.argv[1:]))"]
+            + ["parse", os.path.join(cli_specs_dir, "valid.plain")],
+            stdout=write_end,
+            stderr=subprocess.PIPE,
+        )
+    finally:
+        os.close(write_end)
+
+    assert (result.returncode, result.stderr) == (0, b"")
+
+
+def test_parse_resource_path_is_the_absolute_template_dir_joined_with_the_target(cli_specs_dir, capsys, monkeypatch):
+    # The template dir made absolute against the working directory, the target joined as written.
+    # parent_link/a/spec/top.plain links ../shared/notes.md, which exists only next to the empty parent_link/b/tpl.
+    parent_link = os.path.join(cli_specs_dir, "parent_link")
+    monkeypatch.chdir(parent_link)
+
+    exit_code, out, _ = _run_parse(capsys, os.path.join("a", "spec", "top.plain"), "--template-dir", "b/tpl")
+
+    assert exit_code == 0
+    template_dir = os.path.join(os.path.realpath(parent_link), "b", "tpl")  # getcwd() is the real path
+    assert _parse_output(out)["resources"] == {"../shared/notes.md": os.path.join(template_dir, "../shared/notes.md")}
+
+
+def test_parse_resource_path_keeps_a_symlink_unresolved(tmp_path, capsys):
+    # The OS follows `lnk` before applying `..`, so removing `..` as text would name x.md in the spec dir.
+    _write_module(tmp_path / "top.plain", " See [x](lnk/../x.md).\n")
+    (tmp_path / "sub" / "real").mkdir(parents=True)
+    (tmp_path / "sub" / "x.md").write_text("read through the symlink\n")
+    (tmp_path / "x.md").write_text("next to the spec\n")
+    try:
+        os.symlink(os.path.join("sub", "real"), tmp_path / "lnk")
+    except OSError:
+        pytest.skip("symlinks are not available")
+
+    exit_code, out, _ = _run_parse(capsys, str(tmp_path / "top.plain"))
+
+    assert exit_code == 0
+    path = _parse_output(out)["resources"]["lnk/../x.md"]
+    assert path == os.path.join(str(tmp_path), "lnk/../x.md")
+    with open(path) as f:
+        assert f.read() == "read through the symlink\n"
+
+
+def test_parse_with_template_dir_from_config_prints_only_json(tmp_path, capsys):
+    spec_dir = _project(tmp_path, "config.yaml", "template-dir: template\n")
+
+    exit_code, out, err = _run_parse(capsys, str(spec_dir / "top.plain"))
+
+    assert (exit_code, err) == (0, "")
+    assert _module_names(_parse_output(out)) == ["helper", "top"]
+
+
+@pytest.mark.parametrize("interrupted_function", ["parse_spec", "resolve_config_file"])
+def test_parse_interrupted_exits_130_with_empty_stdout(cli_specs_dir, capsys, monkeypatch, interrupted_function):
+    def interrupt(*_, **__):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(cli, interrupted_function, interrupt)
+
+    exit_code = cli.main(["parse", os.path.join(cli_specs_dir, "valid.plain")])
+
+    captured = capsys.readouterr()
+    assert exit_code == 130
+    assert captured.out == ""
+    assert "Traceback" not in captured.err
+
+
+@pytest.mark.parametrize("entry", ["does_not_exist.plain", "not_plain.md"])
+def test_parse_missing_or_non_plain_entry_is_parser_error(cli_specs_dir, capsys, entry):
+    exit_code, out, err = _run_parse(capsys, os.path.join(cli_specs_dir, entry))
+
+    assert (exit_code, err) == (1, "")
+    assert set(_parse_output(out)) == {"format_version", "type", "message"}
+
+
+def test_parse_path_that_is_not_utf8_is_reported_as_json_error(tmp_path, capsys):
+    spec_dir = os.path.join(os.fsencode(tmp_path), b"bad\xffname")
+    try:
+        os.mkdir(spec_dir)
+    except OSError:
+        pytest.skip("the file system rejects names that are not UTF-8")
+    spec_dir_str = os.fsdecode(spec_dir)
+    _write_module(tmp_path / spec_dir_str / "top.plain", " See [the notes](notes.md).\n")
+    (tmp_path / spec_dir_str / "notes.md").write_text("notes\n")
+
+    exit_code, out, err = _run_parse(capsys, os.path.join(spec_dir_str, "top.plain"))
+
+    assert (exit_code, err) == (1, "")
+    result = _parse_output(out)
+    assert result["type"] == "UnicodeEncodeError"
+    assert result["message"].startswith("The parse result holds text that is not valid UTF-8: ")
+    assert "bad\\udcffname" in result["message"]
+
+
+def test_parse_module_name_that_is_not_utf8_is_quoted_without_trailing_comma(tmp_path, capsys, monkeypatch):
+    spec_name = os.fsdecode(b"bad\xffname.plain")
+    try:
+        _write_module(tmp_path / spec_name)
+    except OSError:
+        pytest.skip("the file system rejects names that are not UTF-8")
+    monkeypatch.chdir(tmp_path)
+
+    exit_code, out, err = _run_parse(capsys, spec_name)
+
+    assert (exit_code, err) == (1, "")
+    assert _parse_output(out)["message"] == (
+        'The parse result holds text that is not valid UTF-8: "module": "bad\\udcffname"'
+    )
+
+
+def test_parse_error_naming_a_path_that_is_not_utf8_keeps_its_type(tmp_path, capsys):
+    spec_dir = os.path.join(os.fsencode(tmp_path), b"bad\xffname")
+    try:
+        os.mkdir(spec_dir)
+    except OSError:
+        pytest.skip("the file system rejects names that are not UTF-8")
+    spec_dir_str = os.fsdecode(spec_dir)
+    _write_module(tmp_path / spec_dir_str / "top.plain", " See [the notes](missing.md).\n")
+
+    exit_code, out, err = _run_parse(capsys, os.path.join(spec_dir_str, "top.plain"))
+
+    assert (exit_code, err) == (1, "")
+    result = _parse_output(out)
+    assert result["type"] == "PlainSyntaxError"
+    assert "bad\\udcffname" in result["message"]
+
+
+def test_parse_result_that_is_not_json_is_reported_as_json_error(cli_specs_dir, capsys, monkeypatch):
+    monkeypatch.setattr(cli, "parse_spec", lambda *_, **__: cli.ParseResult([("valid", {"x": object()})], {}))
+
+    exit_code, out, err = _run_parse(capsys, os.path.join(cli_specs_dir, "valid.plain"))
+
+    assert (exit_code, err) == (1, "")
+    assert _parse_output(out)["type"] == "TypeError"
+
+
+def test_parse_writes_to_a_stdout_without_byte_buffer(cli_specs_dir):
+    stdout = io.StringIO()
+
+    with contextlib.redirect_stdout(stdout):
+        exit_code = cli.main(["parse", os.path.join(cli_specs_dir, "valid.plain")])
+
+    assert exit_code == 0
+    assert _module_names(_parse_output(stdout.getvalue())) == ["valid"]
