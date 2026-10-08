@@ -1,0 +1,14 @@
+---
+requires:
+  - base
+---
+
+***implementation reqs***
+
+- :Implementation: is written in Python.
+
+***functional specs***
+
+- :Implementation: names {% include "snippet.plain", name: "first" %}.
+
+- :Implementation: names {% include "snippet.plain", name: "second" %}.

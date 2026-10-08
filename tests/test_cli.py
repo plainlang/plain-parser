@@ -5,7 +5,8 @@ import sys
 
 import pytest
 
-from plain_parser import cli
+from plain_parser import cli, plain_file
+from plain_parser.exceptions import PlainSyntaxError, UnsupportedResourceType
 
 
 @pytest.fixture
@@ -327,3 +328,54 @@ def test_check_valid_module_prints_ok_line_with_file_as_given(cli_specs_dir, cap
     exit_code, out, err = _run_check(capsys, "valid.plain")
 
     assert (exit_code, out, err) == (0, "valid.plain: OK\n", "")
+
+
+def test_check_reports_ancestor_resource_before_frid_walk_error(cli_specs_dir, capsys):
+    # base.plain links a binary file; top.plain also has a code-variable conflict only the FRID walk finds.
+    spec = os.path.join(cli_specs_dir, "resource_before_frid_walk", "top.plain")
+
+    exit_code, out, err = _run_check(capsys, spec)
+
+    assert (exit_code, out) == (1, "")
+    assert err.startswith("Error: Referenced resource '../binary.bin' in module 'base' is a binary file.")
+
+
+@pytest.fixture
+def requires_specs_dir(get_test_data_path):
+    return get_test_data_path("data/requires")
+
+
+@pytest.mark.parametrize(
+    "entry, expected_chain",
+    [
+        ("chain_top.plain", ["chain_base", "chain_middle", "chain_top"]),
+        # chain_fork_top requires chain_base and chain_middle, which itself requires chain_base.
+        ("chain_fork_top.plain", ["chain_base", "chain_middle", "chain_fork_top"]),
+    ],
+)
+def test_parse_spec_chain_is_deepest_ancestor_first(requires_specs_dir, entry, expected_chain):
+    result = cli.parse_spec(os.path.join(requires_specs_dir, entry), None, load_resources=False)
+
+    assert result.chain == expected_chain
+
+
+def test_parse_spec_tree_is_the_entry_module_tree(requires_specs_dir):
+    result = cli.parse_spec(os.path.join(requires_specs_dir, "chain_top.plain"), None, load_resources=False)
+
+    _, entry_tree = plain_file.parse_module_chain("chain_top.plain", [requires_specs_dir])[-1]
+    assert result.tree == entry_tree
+
+
+def test_parse_spec_raises_on_diverging_requires(requires_specs_dir):
+    with pytest.raises(PlainSyntaxError, match="There must be a fixed order how required modules are dependent"):
+        cli.parse_spec(os.path.join(requires_specs_dir, "diamond_requires_main.plain"), None, load_resources=False)
+
+
+def test_parse_spec_loads_resources_only_when_asked(cli_specs_dir):
+    spec = os.path.join(cli_specs_dir, "binary_resource.plain")
+
+    with pytest.raises(UnsupportedResourceType):
+        cli.parse_spec(spec, None, load_resources=True)
+
+    result = cli.parse_spec(spec, None, load_resources=False)
+    assert result.resources == {"binary.bin": os.path.join(os.path.abspath(cli_specs_dir), "binary.bin")}
