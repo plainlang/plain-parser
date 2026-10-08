@@ -47,13 +47,15 @@ jobs:
         with:
           # hatch-vcs derives the version from git tags, so we need full history.
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Install uv
         # uv provisions its own Python (honoring requires-python), so no
         # separate actions/setup-python step is needed.
-        run: |
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: "0.12.23"
+          enable-cache: false
 
       - name: Compute dev version
         id: version
@@ -65,7 +67,7 @@ jobs:
         # run number as the dev counter: it is strictly increasing, so each
         # merge sorts after the last and re-runs never collide.
         run: |
-          RAW=$(uvx --from setuptools-scm python -c \
+          RAW=$(uvx --from setuptools-scm==10.3.4 python -c \
             "from setuptools_scm import get_version; print(get_version())")
           echo "setuptools-scm reports: $RAW"
 
@@ -110,7 +112,7 @@ jobs:
   publish-dev:
     name: Publish dev build to PyPI
     needs: build
-    if: needs.build.outputs.should-publish == 'true'
+    if: github.ref == 'refs/heads/main' && needs.build.outputs.should-publish == 'true'
     runs-on: ubuntu-latest
     environment:
       name: pypi
@@ -119,9 +121,6 @@ jobs:
       # Mint a short-lived OIDC token so PyPI Trusted Publishing can
       # authenticate this run — no long-lived API token needed.
       id-token: write
-
-    env:
-      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
     steps:
       - name: Download distribution packages
@@ -138,20 +137,27 @@ jobs:
           skip-existing: true
 
       - name: Notify Slack (success)
-        if: ${{ success() && env.SLACK_WEBHOOK_URL != '' }}
+        if: success()
+        continue-on-error: true
         env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           VERSION: ${{ needs.build.outputs.version }}
         run: |
           # Spell out the --pre install: a plain "pip install plain-parser" will
           # NOT pick this up, which otherwise reads as a broken publish.
           TEXT="*plain-parser*: dev build \`$VERSION\` published to PyPI :test_tube:. Normal installs are unaffected — try it with \`pip install --pre plain-parser==$VERSION\`."
-          curl -s -X POST "$SLACK_WEBHOOK_URL" \
+          curl -sS --fail -X POST "$SLACK_WEBHOOK_URL" \
             -H 'Content-type: application/json' \
             --data "$(jq -n --arg t "$TEXT" '{text:$t}')"
 
       - name: Notify Slack (failure)
-        if: ${{ failure() && env.SLACK_WEBHOOK_URL != '' }}
+        if: failure()
+        continue-on-error: true
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
-          curl -s -X POST "$SLACK_WEBHOOK_URL" \
+          RUN_URL="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          TEXT="*plain-parser*: Publishing dev build to PyPI FAILED :x: (commit \`$GITHUB_SHA\`). See <$RUN_URL|the run log>."
+          curl -sS --fail -X POST "$SLACK_WEBHOOK_URL" \
             -H 'Content-type: application/json' \
-            --data "{\"text\":\"*plain-parser*: Publishing dev build to PyPI FAILED :x: (commit \`${{ github.sha }}\`). See <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|the run log>.\"}"
+            --data "$(jq -n --arg t "$TEXT" '{text:$t}')"

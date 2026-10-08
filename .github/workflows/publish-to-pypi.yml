@@ -23,30 +23,34 @@ jobs:
     needs: pre-publish-checks
     runs-on: ubuntu-latest
     permissions:
-      contents: write
-
-    env:
-      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      contents: read
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # hatch-vcs derives the version from git tags, so we need full history.
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Notify Slack (start)
-        if: ${{ env.SLACK_WEBHOOK_URL != '' }}
+        continue-on-error: true
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          TAG: ${{ github.ref_name }}
+          ACTOR: ${{ github.actor }}
         run: |
-          curl -s -X POST "$SLACK_WEBHOOK_URL" \
+          TEXT="*plain-parser*: Release \`$TAG\` published by *$ACTOR* — building and publishing to PyPI..."
+          curl -sS --fail -X POST "$SLACK_WEBHOOK_URL" \
             -H 'Content-type: application/json' \
-            --data "{\"text\":\"*plain-parser*: Release \`${{ github.ref_name }}\` published by *${{ github.actor }}* — building and publishing to PyPI...\"}"
+            --data "$(jq -n --arg t "$TEXT" '{text:$t}')"
 
       - name: Install uv
         # uv provisions its own Python (honoring requires-python), so no
         # separate actions/setup-python step is needed.
-        run: |
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: "0.12.23"
+          enable-cache: false
 
       - name: Build package
         # hatch-vcs reads the version straight from the release tag.
@@ -61,22 +65,57 @@ jobs:
           name: python-package-distributions
           path: dist/
 
+      - name: Notify Slack (build failure)
+        if: failure()
+        continue-on-error: true
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          RUN_URL="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          TEXT="*plain-parser*: Build of \`$TAG\` FAILED :x:. Nothing was published to PyPI. See <$RUN_URL|the run log>."
+          curl -sS --fail -X POST "$SLACK_WEBHOOK_URL" \
+            -H 'Content-type: application/json' \
+            --data "$(jq -n --arg t "$TEXT" '{text:$t}')"
+
+  upload-release-assets:
+    name: Upload assets to GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download distribution packages
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: python-package-distributions
+          path: dist/
+
       - name: Upload assets to GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
         run: |
-          gh release upload ${{ github.ref_name }} dist/* --clobber
+          gh release upload "$TAG" dist/* --clobber
 
-      - name: Notify Slack (build failure)
-        if: ${{ failure() && env.SLACK_WEBHOOK_URL != '' }}
+      - name: Notify Slack (upload failure)
+        if: failure()
+        continue-on-error: true
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          TAG: ${{ github.ref_name }}
         run: |
-          curl -s -X POST "$SLACK_WEBHOOK_URL" \
+          RUN_URL="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          TEXT="*plain-parser*: Uploading \`$TAG\` to the GitHub Release FAILED :x:. Nothing was published to PyPI. See <$RUN_URL|the run log>."
+          curl -sS --fail -X POST "$SLACK_WEBHOOK_URL" \
             -H 'Content-type: application/json' \
-            --data "{\"text\":\"*plain-parser*: Build of \`${{ github.ref_name }}\` FAILED :x:. Nothing was published to PyPI. See <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|the run log>.\"}"
+            --data "$(jq -n --arg t "$TEXT" '{text:$t}')"
 
   publish-to-pypi:
     name: Publish to PyPI
-    needs: build
+    needs: [build, upload-release-assets]
     runs-on: ubuntu-latest
     environment:
       name: pypi
@@ -85,9 +124,6 @@ jobs:
       # Mint a short-lived OIDC token so PyPI Trusted Publishing can
       # authenticate this run — no long-lived API token needed.
       id-token: write
-
-    env:
-      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
     steps:
       - name: Download distribution packages
@@ -100,8 +136,10 @@ jobs:
         uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # release/v1
 
       - name: Notify Slack (success)
-        if: ${{ success() && env.SLACK_WEBHOOK_URL != '' }}
+        if: success()
+        continue-on-error: true
         env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           # GitHub marks the release itself as a pre-release; the tag
           # (v0.2.0rc1) carries the same intent for PEP 440.
           IS_PRERELEASE: ${{ github.event.release.prerelease }}
@@ -115,13 +153,19 @@ jobs:
           else
             TEXT="*plain-parser*: \`$TAG\` published to PyPI :white_check_mark:. Install with \`pip install --upgrade plain-parser\`."
           fi
-          curl -s -X POST "$SLACK_WEBHOOK_URL" \
+          curl -sS --fail -X POST "$SLACK_WEBHOOK_URL" \
             -H 'Content-type: application/json' \
             --data "$(jq -n --arg t "$TEXT" '{text:$t}')"
 
       - name: Notify Slack (failure)
-        if: ${{ failure() && env.SLACK_WEBHOOK_URL != '' }}
+        if: failure()
+        continue-on-error: true
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          TAG: ${{ github.ref_name }}
         run: |
-          curl -s -X POST "$SLACK_WEBHOOK_URL" \
+          RUN_URL="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          TEXT="*plain-parser*: Publishing \`$TAG\` to PyPI FAILED :x:. See <$RUN_URL|the run log>."
+          curl -sS --fail -X POST "$SLACK_WEBHOOK_URL" \
             -H 'Content-type: application/json' \
-            --data "{\"text\":\"*plain-parser*: Publishing \`${{ github.ref_name }}\` to PyPI FAILED :x:. See <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|the run log>.\"}"
+            --data "$(jq -n --arg t "$TEXT" '{text:$t}')"
