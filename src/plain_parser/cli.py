@@ -26,7 +26,7 @@ def build_parser() -> argparse.ArgumentParser:
     check_parser = subparsers.add_parser(
         "check",
         help="Validate a .plain module and its requires chain, and read every linked file: "
-        "binary files and large base64 blobs are rejected, as codeplain requires.",
+        "binary files and large base64 blobs are rejected.",
     )
     parse_parser = subparsers.add_parser(
         "parse",
