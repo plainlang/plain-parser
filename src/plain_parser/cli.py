@@ -3,6 +3,7 @@
 import argparse
 import os
 import sys
+from dataclasses import dataclass
 
 import yaml
 
@@ -71,22 +72,45 @@ def template_dir_from_config(config_file: str) -> str | None:
     return None
 
 
-def check(plain_file_path: str, template_dir: str | None) -> None:
-    """Raise if the module, its requires chain, or its linked resources are invalid."""
+@dataclass
+class ParseResult:
+    chain: list[str]  # Module names, deepest ancestor first, entry last.
+    tree: dict  # The entry module's plain source tree.
+    resources: dict[str, str]  # Each link target in the chain, as written, to its absolute path.
+
+
+def parse_spec(plain_file_path: str, template_dir: str | None, load_resources: bool) -> ParseResult:
+    """Parse the module and its requires chain, resolve its links, and walk its FRIDs; raise on the first error.
+
+    With ``load_resources``, each module's linked files are also read and checked (text only, no large base64 blob) right
+    after that module's links are collected, so a resource error is reported before a FRID-walk error.
+    """
     template_dirs = [os.path.dirname(os.path.abspath(plain_file_path))]
     if template_dir:
         template_dirs.append(template_dir)
 
     chain = plain_file.parse_module_chain(os.path.basename(plain_file_path), template_dirs)
 
+    resources: dict[str, str] = {}
     for module_name, plain_source_tree in chain:
         resources_list: list[dict] = []
         plain_spec.collect_linked_resources(plain_source_tree, resources_list, None, True)
-        loaders.load_linked_resources(template_dirs, resources_list, module_name)
+        if load_resources:
+            loaders.load_linked_resources(template_dirs, resources_list, module_name)
+        for resource in resources_list:
+            target = resource["target"]
+            resources[target] = os.path.abspath(loaders.resolve_linked_resource(template_dirs, target))
 
     _, top_plain_source_tree = chain[-1]
     for frid in plain_spec.get_frids(top_plain_source_tree):
         plain_spec.get_specifications_for_frid(top_plain_source_tree, frid)
+
+    return ParseResult([module_name for module_name, _ in chain], top_plain_source_tree, resources)
+
+
+def check(plain_file_path: str, template_dir: str | None) -> None:
+    """Raise if the module, its requires chain, or its linked resources are invalid."""
+    parse_spec(plain_file_path, template_dir, load_resources=True)
 
 
 def main(argv: list[str] | None = None) -> int:

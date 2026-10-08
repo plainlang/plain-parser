@@ -1,0 +1,8 @@
+***implementation reqs***
+
+- :Implementation: is written in Python.
+- :Implementation: follows [the data](../binary.bin).
+
+***functional specs***
+
+- :Implementation: has an entry point.
