@@ -58,3 +58,19 @@ def test_plain_file_parser_validates_required_modules(get_test_data_path):
     # The ancestor is fully validated during the parse of the top module, not only when the chain is walked.
     with pytest.raises(Exception, match="Concept :UndefinedThing: is not defined"):
         plain_file.plain_file_parser("invalid_ancestor_top.plain", [get_test_data_path("data/requires")])
+
+
+def test_required_module_sees_exports_of_an_ancestor_listed_before_it(get_test_data_path):
+    # shared_export_top requires [base, middle]; middle uses :KeyStore: exported by base.
+    plain_file.plain_file_parser("shared_export_top.plain", [get_test_data_path("data/requires")])
+
+
+def test_module_above_a_repeated_ancestor_parses(get_test_data_path):
+    chain = plain_file.parse_module_chain("shared_export_above.plain", [get_test_data_path("data/requires")])
+
+    assert [module_name for module_name, _ in chain] == [
+        "shared_export_base",
+        "shared_export_middle",
+        "shared_export_top",
+        "shared_export_above",
+    ]
