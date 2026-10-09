@@ -715,11 +715,13 @@ def process_required_modules(
     all_required_modules: list[str],
     modules_trace: list[str],
     chain: list[tuple[str, dict]],
+    module_exports: dict[str, list[mistletoe.block_token.token]],
 ) -> list[mistletoe.block_token.token]:
     """Parse and fully validate every required module, deepest first.
 
-    Appends ``(module name, marshalled plain source tree)`` to ``chain`` for each module not already in it
-    and returns the exported definitions of the directly required modules.
+    Appends ``(module name, marshalled plain source tree)`` to ``chain`` for each module not already in it,
+    records each module's exported definitions in ``module_exports``, and returns the exported definitions
+    of the directly required modules.
     """
     exported_definitions = list[mistletoe.block_token.token]()
     for module_name in required_modules:
@@ -727,6 +729,8 @@ def process_required_modules(
             raise PlainSyntaxError(f"Plain syntax error: Circular required module detected: {module_name}.")
 
         if len(all_required_modules) > 0 and module_name == all_required_modules[-1]:
+            # Already processed as an earlier entry; its exports are still visible to this module.
+            exported_definitions.extend(module_exports[module_name])
             continue
 
         code_variables: dict = {}
@@ -750,8 +754,10 @@ def process_required_modules(
                 all_required_modules,
                 modules_trace + [module_name],
                 chain,
+                module_exports,
             )
 
+        own_exported_definitions = list[mistletoe.block_token.token]()
         if EXPORTED_CONCEPTS_DIRECTIVE in plain_file_parse_result.plain_source_obj.metadata:
             exported_concepts = list[str]()
             for concept in plain_file_parse_result.plain_source_obj.metadata[EXPORTED_CONCEPTS_DIRECTIVE]:
@@ -759,11 +765,13 @@ def process_required_modules(
 
             with PlainRenderer() as renderer:
                 for exported_concept in exported_concepts:
-                    exported_definitions.extend(
+                    own_exported_definitions.extend(
                         concept_utils.find_concept_definitions_in_plain_source(
                             exported_concept, plain_file_parse_result.plain_source, renderer
                         )
                     )
+        module_exports[module_name] = own_exported_definitions
+        exported_definitions.extend(own_exported_definitions)
 
         marshalled_plain_source = validate_and_marshall_module(
             plain_file_parse_result, module_name, ancestor_exported_definitions, code_variables, template_dirs
@@ -889,6 +897,7 @@ def _parse_module(
         all_required_modules=[],
         modules_trace=[],
         chain=chain,
+        module_exports={},
     )
 
     marshalled_plain_source = validate_and_marshall_module(
