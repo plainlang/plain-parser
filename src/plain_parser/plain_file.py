@@ -709,19 +709,31 @@ def parse_plain_file(
     )
 
 
+@dataclass
+class RequiredModule:
+    """A required module as parsed by the requires walk; validated once the top module is complete."""
+
+    parse_result: PlainFileParseResult
+    # Definitions exported to this module by the modules it requires.
+    ancestor_exported_definitions: list[mistletoe.block_token.token]
+    code_variables: dict
+    # Definitions this module exports to the modules that require it.
+    exported_definitions: list[mistletoe.block_token.token]
+
+
 def process_required_modules(
     required_modules: list[str],
     template_dirs: list[str],
     all_required_modules: list[str],
     modules_trace: list[str],
-    chain: list[tuple[str, dict]],
-    module_exports: dict[str, list[mistletoe.block_token.token]],
+    walk_order: list[str],
+    required: dict[str, RequiredModule],
 ) -> list[mistletoe.block_token.token]:
-    """Parse and fully validate every required module, deepest first.
+    """Parse every required module, deepest first, without validating it.
 
-    Appends ``(module name, marshalled plain source tree)`` to ``chain`` for each module not already in it,
-    records each module's exported definitions in ``module_exports``, and returns the exported definitions
-    of the directly required modules.
+    Appends each module name to ``walk_order`` the first time it is reached (deepest ancestors first),
+    records its parse result in ``required``, and returns the exported definitions of the directly
+    required modules.
     """
     exported_definitions = list[mistletoe.block_token.token]()
     for module_name in required_modules:
@@ -730,7 +742,7 @@ def process_required_modules(
 
         if len(all_required_modules) > 0 and module_name == all_required_modules[-1]:
             # Already processed as an earlier entry; its exports are still visible to this module.
-            exported_definitions.extend(module_exports[module_name])
+            exported_definitions.extend(required[module_name].exported_definitions)
             continue
 
         code_variables: dict = {}
@@ -753,8 +765,8 @@ def process_required_modules(
                 template_dirs,
                 all_required_modules,
                 modules_trace + [module_name],
-                chain,
-                module_exports,
+                walk_order,
+                required,
             )
 
         own_exported_definitions = list[mistletoe.block_token.token]()
@@ -770,18 +782,35 @@ def process_required_modules(
                             exported_concept, plain_file_parse_result.plain_source, renderer
                         )
                     )
-        module_exports[module_name] = own_exported_definitions
+        required[module_name] = RequiredModule(
+            plain_file_parse_result, ancestor_exported_definitions, code_variables, own_exported_definitions
+        )
         exported_definitions.extend(own_exported_definitions)
 
-        marshalled_plain_source = validate_and_marshall_module(
-            plain_file_parse_result, module_name, ancestor_exported_definitions, code_variables, template_dirs
-        )
-        if module_name not in (chain_module_name for chain_module_name, _ in chain):
-            chain.append((module_name, marshalled_plain_source))
+        if module_name not in walk_order:
+            walk_order.append(module_name)
 
         all_required_modules.append(module_name)
 
     return exported_definitions
+
+
+def validate_required_modules(
+    required_modules: list[str],
+    required: dict[str, RequiredModule],
+    template_dirs: list[str],
+    trees: dict[str, dict],
+) -> None:
+    """Validate recorded required modules top-down, in listed order, each module once."""
+    for module_name in required_modules:
+        if module_name in trees:
+            continue
+
+        module = required[module_name]
+        trees[module_name] = validate_and_marshall_module(
+            module.parse_result, module_name, module.ancestor_exported_definitions, module.code_variables, template_dirs
+        )
+        validate_required_modules(module.parse_result.required_modules, required, template_dirs, trees)
 
 
 def process_exported_definitions(plain_source: dict, exported_definitions: list[mistletoe.block_token.token]) -> None:
@@ -908,19 +937,28 @@ def _parse_module(
         modules_trace=[],
     )
 
-    chain: list[tuple[str, dict]] = []
+    # Check the top module's structure, walk its requires, finish the top module's checks, then validate
+    # every required module top-down.
+    validate_module_structure(plain_file_parse_result, module_name)
+
+    walk_order: list[str] = []
+    required: dict[str, RequiredModule] = {}
     exported_definitions = process_required_modules(
         plain_file_parse_result.required_modules,
         template_dirs=template_dirs,
         all_required_modules=[],
         modules_trace=[],
-        chain=chain,
-        module_exports={},
+        walk_order=walk_order,
+        required=required,
     )
 
-    marshalled_plain_source = validate_and_marshall_module(
+    marshalled_plain_source = validate_and_build_module_tree(
         plain_file_parse_result, module_name, exported_definitions, code_variables, template_dirs
     )
+
+    trees: dict[str, dict] = {}
+    validate_required_modules(plain_file_parse_result.required_modules, required, template_dirs, trees)
+    chain = [(chain_module_name, trees[chain_module_name]) for chain_module_name in walk_order]
 
     return module_name, marshalled_plain_source, plain_file_parse_result.required_modules, chain
 
