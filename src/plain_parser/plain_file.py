@@ -806,14 +806,8 @@ def process_exported_definitions(plain_source: dict, exported_definitions: list[
                 plain_source[plain_spec.DEFINITIONS].children.append(exported_definition)
 
 
-def validate_and_marshall_module(
-    plain_file_parse_result: PlainFileParseResult,
-    module_name: str,
-    exported_definitions: list[mistletoe.block_token.token],
-    code_variables: dict,
-    template_dirs: list[str],
-) -> dict:
-    """Every check a module must pass after parsing, and its marshalled plain source tree."""
+def validate_module_structure(plain_file_parse_result: PlainFileParseResult, module_name: str) -> None:
+    """Required concepts defined, functional specs present and non-empty, implementation reqs present."""
     if len(plain_file_parse_result.required_concepts) > 0:
         missing_required_concepts_msg = "Missing required concepts: "
         missing_required_concepts_msg += ", ".join(plain_file_parse_result.required_concepts)
@@ -841,6 +835,16 @@ def validate_and_marshall_module(
         has_requires=bool(plain_file_parse_result.required_modules),
     )
 
+
+def validate_and_build_module_tree(
+    plain_file_parse_result: PlainFileParseResult,
+    module_name: str,
+    exported_definitions: list[mistletoe.block_token.token],
+    code_variables: dict,
+    template_dirs: list[str],
+) -> dict:
+    """Merge exported definitions, validate acceptance tests, linked resources and concepts, and return the
+    marshalled plain source tree."""
     process_exported_definitions(plain_file_parse_result.plain_source, exported_definitions)
 
     process_acceptance_tests(plain_file_parse_result.plain_source)
@@ -861,6 +865,20 @@ def validate_and_marshall_module(
         concept_utils.sort_definitions(marshalled_plain_source[plain_spec.DEFINITIONS])
 
     return marshalled_plain_source
+
+
+def validate_and_marshall_module(
+    plain_file_parse_result: PlainFileParseResult,
+    module_name: str,
+    exported_definitions: list[mistletoe.block_token.token],
+    code_variables: dict,
+    template_dirs: list[str],
+) -> dict:
+    """Every check a module must pass after parsing, and its marshalled plain source tree."""
+    validate_module_structure(plain_file_parse_result, module_name)
+    return validate_and_build_module_tree(
+        plain_file_parse_result, module_name, exported_definitions, code_variables, template_dirs
+    )
 
 
 def _parse_module(
