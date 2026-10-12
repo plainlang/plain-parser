@@ -1,7 +1,7 @@
 import pytest
 
 from plain_parser import plain_file
-from plain_parser.exceptions import ModuleDoesNotExistError, PlainSyntaxError
+from plain_parser.exceptions import MissingFunctionalitiesError, ModuleDoesNotExistError, PlainSyntaxError
 
 
 def test_non_existent_require(get_test_data_path):
@@ -154,6 +154,14 @@ ACCEPTED_CHAINS = [
         marks=pytest.mark.xfail(strict=True, reason="an ancestor must be listed before its dependent"),
     ),
     #   Top
+    #    ||     Top lists Base twice
+    #   Base
+    pytest.param(
+        {"Top": ["Base", "Base"], "Base": []},
+        ["Base", "Top"],
+        id="top-lists-base-twice",
+    ),
+    #   Top
     #    |
     #   Upper    every module also requires every module below it
     #    |
@@ -267,3 +275,62 @@ def test_requires_independent_branches_are_rejected(tmp_path, requires_by_module
 
     with pytest.raises(PlainSyntaxError, match="There must be a fixed order how required modules are dependent"):
         plain_file.parse_module_chain("Top.plain", [str(tmp_path)])
+
+
+# Two broken modules in one chain: each test pins which error is reported first.
+def test_top_module_shape_is_checked_before_its_requires_are_read(tmp_path):
+    (tmp_path / "Top.plain").write_text("---\nrequires:\n  - Missing\n---\n\n***implementation reqs***\n\n- Req.\n")
+
+    with pytest.raises(MissingFunctionalitiesError):
+        plain_file.plain_file_parser("Top.plain", [str(tmp_path)])
+
+
+def test_top_module_shape_is_checked_before_required_modules_are_validated(tmp_path):
+    write_module(tmp_path, "Base", [], [], [], "Base uses :BaseMissing:.")
+    (tmp_path / "Top.plain").write_text("---\nrequires:\n  - Base\n---\n\n***implementation reqs***\n\n- Req.\n")
+
+    with pytest.raises(MissingFunctionalitiesError):
+        plain_file.plain_file_parser("Top.plain", [str(tmp_path)])
+
+
+def test_parse_errors_of_required_modules_come_before_top_module_concept_errors(tmp_path):
+    (tmp_path / "Base.plain").write_text(
+        "***implementation reqs***\n\n- {% if %}\n\n***functional specs***\n\n- Base works.\n"
+    )
+    write_module(tmp_path, "Top", [], ["Base"], [], "Top uses :TopMissing:.")
+
+    with pytest.raises(PlainSyntaxError, match="Invalid Liquid"):
+        plain_file.plain_file_parser("Top.plain", [str(tmp_path)])
+
+
+def test_top_module_concept_errors_come_before_required_module_concept_errors(tmp_path):
+    write_module(tmp_path, "Base", [], [], [], "Base uses :BaseMissing:.")
+    write_module(tmp_path, "Top", [], ["Base"], [], "Top uses :TopMissing:.")
+
+    with pytest.raises(PlainSyntaxError, match="Concept :TopMissing: is not defined"):
+        plain_file.plain_file_parser("Top.plain", [str(tmp_path)])
+
+
+def test_required_modules_are_validated_top_down(tmp_path):
+    write_module(tmp_path, "Base", [], [], [], "Base uses :BaseMissing:.")
+    write_module(tmp_path, "Middle", [], ["Base"], [], "Middle uses :MiddleMissing:.")
+    write_module(tmp_path, "Top", [], ["Middle"], [], "Top works.")
+
+    with pytest.raises(PlainSyntaxError, match="Concept :MiddleMissing: is not defined"):
+        plain_file.plain_file_parser("Top.plain", [str(tmp_path)])
+
+
+def test_module_listed_twice_around_its_dependent_is_rejected(tmp_path):
+    write_modules_using_required_exports(tmp_path, {"Top": ["Base", "Middle", "Base"], "Middle": ["Base"], "Base": []})
+
+    with pytest.raises(PlainSyntaxError, match="There must be a fixed order how required modules are dependent"):
+        plain_file.parse_module_chain("Top.plain", [str(tmp_path)])
+
+
+def test_chain_has_a_tree_for_every_module_reached_by_the_walk(tmp_path):
+    write_modules_using_required_exports(tmp_path, {"Top": ["Base", "Middle"], "Middle": ["Base"], "Base": []})
+
+    chain = plain_file.parse_module_chain("Top.plain", [str(tmp_path)])
+
+    assert [module_name for module_name, _ in chain] == ["Base", "Middle", "Top"]
+    assert all("functional specs" in tree for _, tree in chain)
