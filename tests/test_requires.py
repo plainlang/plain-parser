@@ -61,6 +61,7 @@ def test_plain_file_parser_validates_required_modules(get_test_data_path):
 
 
 def write_module(directory, module_name, exported_concepts, required_modules, definitions, functional_spec):
+    # functional_spec=None writes a module without a ***functional specs*** section.
     exports = "".join(f"  - {concept}\n" for concept in exported_concepts)
     requires = "".join(f"  - {required_module}\n" for required_module in required_modules)
     (directory / f"{module_name}.plain").write_text(
@@ -70,8 +71,8 @@ def write_module(directory, module_name, exported_concepts, required_modules, de
         + "---\n\n"
         "***definitions***\n\n"
         + "".join(f"- {definition}\n\n" for definition in definitions)
-        + "***implementation reqs***\n\n- An implementation requirement.\n\n"
-        f"***functional specs***\n\n- {functional_spec}\n"
+        + "***implementation reqs***\n\n- An implementation requirement.\n"
+        + (f"\n***functional specs***\n\n- {functional_spec}\n" if functional_spec is not None else "")
     )
 
 
@@ -279,7 +280,7 @@ def test_requires_independent_branches_are_rejected(tmp_path, requires_by_module
 
 # Two broken modules in one chain: each test pins which error is reported first.
 def test_top_module_shape_is_checked_before_its_requires_are_read(tmp_path):
-    (tmp_path / "Top.plain").write_text("---\nrequires:\n  - Missing\n---\n\n***implementation reqs***\n\n- Req.\n")
+    write_module(tmp_path, "Top", [], ["Missing"], [], None)
 
     with pytest.raises(MissingFunctionalitiesError):
         plain_file.plain_file_parser("Top.plain", [str(tmp_path)])
@@ -287,7 +288,7 @@ def test_top_module_shape_is_checked_before_its_requires_are_read(tmp_path):
 
 def test_top_module_shape_is_checked_before_required_modules_are_validated(tmp_path):
     write_module(tmp_path, "Base", [], [], [], "Base uses :BaseMissing:.")
-    (tmp_path / "Top.plain").write_text("---\nrequires:\n  - Base\n---\n\n***implementation reqs***\n\n- Req.\n")
+    write_module(tmp_path, "Top", [], ["Base"], [], None)
 
     with pytest.raises(MissingFunctionalitiesError):
         plain_file.plain_file_parser("Top.plain", [str(tmp_path)])
@@ -334,3 +335,36 @@ def test_chain_has_a_tree_for_every_module_reached_by_the_walk(tmp_path):
 
     assert [module_name for module_name, _ in chain] == ["Base", "Middle", "Top"]
     assert all("functional specs" in tree for _, tree in chain)
+
+
+def test_required_module_without_functional_specs_is_rejected(tmp_path):
+    write_module(tmp_path, "Base", [], [], [], None)
+    write_module(tmp_path, "Top", [], ["Base"], [], "Top works.")
+
+    with pytest.raises(MissingFunctionalitiesError, match="Module 'Base'"):
+        plain_file.plain_file_parser("Top.plain", [str(tmp_path)])
+
+
+def test_top_module_concept_errors_come_before_required_module_structure_errors(tmp_path):
+    write_module(tmp_path, "Base", [], [], [], None)
+    write_module(tmp_path, "Top", [], ["Base"], [], "Top uses :TopMissing:.")
+
+    with pytest.raises(PlainSyntaxError, match="Concept :TopMissing: is not defined"):
+        plain_file.plain_file_parser("Top.plain", [str(tmp_path)])
+
+
+def test_each_required_module_is_validated_once_top_down(tmp_path, monkeypatch):
+    write_modules_using_required_exports(tmp_path, {"Top": ["Base", "Middle"], "Middle": ["Base"], "Base": []})
+    # A second validation pass over a module would be idempotent, so only the call count can observe it.
+    built = []
+    build_tree = plain_file.validate_and_build_module_tree
+
+    def record_and_build(parse_result, module_name, *args):
+        built.append(module_name)
+        return build_tree(parse_result, module_name, *args)
+
+    monkeypatch.setattr(plain_file, "validate_and_build_module_tree", record_and_build)
+
+    plain_file.parse_module_chain("Top.plain", [str(tmp_path)])
+
+    assert built == ["Top", "Base", "Middle"]
