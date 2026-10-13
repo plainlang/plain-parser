@@ -36,18 +36,39 @@ def open_from(dirs, file_name):
     return None
 
 
-def resolve_linked_resource(dirs, file_name):
-    """Return the first existing path for file_name across dirs, or None if not found.
+def find_resource_dir(dirs, file_name):
+    """Return the first dir in which file_name exists, or None if not found.
 
     Mirrors the search order used by open_from so that validating a linked resource and
     loading it can never disagree.
     """
     for dir in dirs:
-        full_file_name = os.path.join(dir, file_name)
-        if os.path.exists(full_file_name):
-            return full_file_name
+        if os.path.exists(os.path.join(dir, file_name)):
+            return dir
 
     return None
+
+
+def resolve_linked_resource(dirs, file_name):
+    """Return the first existing path for file_name across dirs, or None if not found."""
+    resource_dir = find_resource_dir(dirs, file_name)
+    return None if resource_dir is None else os.path.join(resource_dir, file_name)
+
+
+def relative_resource_path(base_dir: str, resource_dir: str, target: str) -> str:
+    """The path of target in resource_dir, relative to base_dir, with `/` as separator.
+
+    The dir part is computed lexically (symlinks not resolved) and the target is appended as written (`..` kept),
+    so joining the result onto base_dir names the same file as os.path.join(resource_dir, target). When no relative
+    path exists (another drive on Windows), the absolute path is returned instead, still with `/`.
+    """
+    try:
+        rel_dir = os.path.relpath(resource_dir, base_dir)
+    except ValueError:
+        return os.path.join(resource_dir, target).replace(os.sep, "/")
+    if rel_dir == os.curdir:
+        return target
+    return rel_dir.replace(os.sep, "/") + "/" + target
 
 
 def load_linked_resources(template_dirs: list[str], resources_list, module_name: str):

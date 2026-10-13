@@ -8,7 +8,7 @@ import sys
 
 import pytest
 
-from plain_parser import cli, plain_file
+from plain_parser import cli, loaders, plain_file
 
 
 @pytest.fixture
@@ -455,7 +455,7 @@ def test_parse_resolves_link_from_template_dir(cli_specs_dir, capsys):
     )
 
     assert exit_code == 0
-    assert _parse_output(out)["resources"] == {"notes.md": os.path.join(os.path.abspath(template_dir), "notes.md")}
+    assert _parse_output(out)["resources"] == {"notes.md": "../tpl/notes.md"}
 
 
 @pytest.mark.parametrize("entry", ["binary_resource.plain", "requires_binary_resource_top.plain"])
@@ -464,7 +464,7 @@ def test_parse_accepts_binary_resource_that_check_rejects(cli_specs_dir, capsys,
 
     exit_code, out, _ = _run_parse(capsys, spec)
     assert exit_code == 0
-    assert _parse_output(out)["resources"] == {"binary.bin": os.path.join(os.path.abspath(cli_specs_dir), "binary.bin")}
+    assert _parse_output(out)["resources"] == {"binary.bin": "binary.bin"}
 
     check_exit_code, _, check_err = _run_check(capsys, spec)
     assert check_exit_code == 1
@@ -478,7 +478,7 @@ def test_parse_lists_a_target_linked_from_two_modules_once(cli_specs_dir, capsys
     assert exit_code == 0
     result = _parse_output(out)
     assert _module_names(result) == ["shared_link_helper", "shared_link_top"]
-    assert result["resources"] == {"notes.md": os.path.join(os.path.abspath(cli_specs_dir), "notes.md")}
+    assert result["resources"] == {"notes.md": "notes.md"}
 
 
 def test_parse_without_file_argument_is_usage_error(capsys):
@@ -533,8 +533,10 @@ def test_parse_to_a_closed_pipe_keeps_the_exit_code_and_prints_no_error(cli_spec
     assert (result.returncode, result.stderr) == (0, b"")
 
 
-def test_parse_resource_path_is_the_absolute_template_dir_joined_with_the_target(cli_specs_dir, capsys, monkeypatch):
-    # The template dir made absolute against the working directory, the target joined as written.
+def test_parse_resource_path_is_the_template_dir_relative_to_the_entry_dir_joined_with_the_target(
+    cli_specs_dir, capsys, monkeypatch
+):
+    # The template dir made relative to the entry module's dir, the target joined as written.
     # parent_link/a/spec/top.plain links ../shared/notes.md, which exists only next to the empty parent_link/b/tpl.
     parent_link = os.path.join(cli_specs_dir, "parent_link")
     monkeypatch.chdir(parent_link)
@@ -542,8 +544,7 @@ def test_parse_resource_path_is_the_absolute_template_dir_joined_with_the_target
     exit_code, out, _ = _run_parse(capsys, os.path.join("a", "spec", "top.plain"), "--template-dir", "b/tpl")
 
     assert exit_code == 0
-    template_dir = os.path.join(os.path.realpath(parent_link), "b", "tpl")  # getcwd() is the real path
-    assert _parse_output(out)["resources"] == {"../shared/notes.md": os.path.join(template_dir, "../shared/notes.md")}
+    assert _parse_output(out)["resources"] == {"../shared/notes.md": "../../b/tpl/../shared/notes.md"}
 
 
 def test_parse_resource_path_keeps_a_symlink_unresolved(tmp_path, capsys):
@@ -561,9 +562,36 @@ def test_parse_resource_path_keeps_a_symlink_unresolved(tmp_path, capsys):
 
     assert exit_code == 0
     path = _parse_output(out)["resources"]["lnk/../x.md"]
-    assert path == os.path.join(str(tmp_path), "lnk/../x.md")
-    with open(path) as f:
+    assert path == "lnk/../x.md"
+    with open(os.path.join(str(tmp_path), path)) as f:
         assert f.read() == "read through the symlink\n"
+
+
+def test_parse_resource_path_falls_back_to_absolute_when_no_relative_path_exists(cli_specs_dir, capsys, monkeypatch):
+    # On Windows a template dir on another drive has no relative path; os.path.relpath raises ValueError.
+    template_dir = os.path.join(cli_specs_dir, "template_link", "tpl")
+    monkeypatch.setattr(os.path, "relpath", lambda *args: (_ for _ in ()).throw(ValueError("different drives")))
+
+    exit_code, out, _ = _run_parse(
+        capsys, os.path.join(cli_specs_dir, "template_link", "spec", "top.plain"), "--template-dir", template_dir
+    )
+
+    assert exit_code == 0
+    expected = os.path.join(os.path.abspath(template_dir), "notes.md").replace(os.sep, "/")
+    assert _parse_output(out)["resources"] == {"notes.md": expected}
+
+
+def test_parse_spec_resource_path_joined_onto_the_entry_dir_names_the_resolved_file(cli_specs_dir):
+    # The library result and the command print the same value: parse_spec is the contract, parse serialises it.
+    entry = os.path.join(cli_specs_dir, "template_link", "spec", "top.plain")
+    template_dir = os.path.join(cli_specs_dir, "template_link", "tpl")
+
+    result = cli.parse_spec(entry, template_dir, load_resources=False)
+
+    value = result.resources["notes.md"]
+    assert value == "../tpl/notes.md"
+    joined = os.path.join(os.path.dirname(os.path.abspath(entry)), value)
+    assert os.path.samefile(joined, loaders.resolve_linked_resource([os.path.abspath(template_dir)], "notes.md"))
 
 
 def test_parse_with_template_dir_from_config_prints_only_json(tmp_path, capsys):
@@ -598,7 +626,8 @@ def test_parse_missing_or_non_plain_entry_is_parser_error(cli_specs_dir, capsys,
     assert set(_parse_output(out)) == {"format_version", "type", "message"}
 
 
-def test_parse_path_that_is_not_utf8_is_reported_as_json_error(tmp_path, capsys):
+def test_parse_dir_name_that_is_not_utf8_stays_out_of_a_valid_result(tmp_path, capsys):
+    # Resource paths are relative to the entry module's dir, so the dir's own name never reaches the output.
     spec_dir = os.path.join(os.fsencode(tmp_path), b"bad\xffname")
     try:
         os.mkdir(spec_dir)
@@ -610,11 +639,8 @@ def test_parse_path_that_is_not_utf8_is_reported_as_json_error(tmp_path, capsys)
 
     exit_code, out, err = _run_parse(capsys, os.path.join(spec_dir_str, "top.plain"))
 
-    assert (exit_code, err) == (1, "")
-    result = _parse_output(out)
-    assert result["type"] == "UnicodeEncodeError"
-    assert result["message"].startswith("The parse result holds text that is not valid UTF-8: ")
-    assert "bad\\udcffname" in result["message"]
+    assert (exit_code, err) == (0, "")
+    assert _parse_output(out)["resources"] == {"notes.md": "notes.md"}
 
 
 def test_parse_module_name_that_is_not_utf8_is_quoted_without_trailing_comma(tmp_path, capsys, monkeypatch):
