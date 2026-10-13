@@ -89,7 +89,9 @@ class ParseResult:
     modules: list[
         tuple[str, dict]
     ]  # (module name, plain source tree) for the chain, deepest ancestor first, entry last.
-    resources: dict[str, str]  # Each link target in the chain, as written, to the absolute path it resolves to.
+    # Each link target in the chain, as written, to the path it resolves to, relative to the entry module's dir
+    # with `/` as separator (loaders.relative_resource_path).
+    resources: dict[str, str]
 
 
 def parse_spec(plain_file_path: str, template_dir: str | None, load_resources: bool) -> ParseResult:
@@ -105,7 +107,8 @@ def parse_spec(plain_file_path: str, template_dir: str | None, load_resources: b
 
     chain = plain_file.parse_module_chain(os.path.basename(plain_file_path), template_dirs)
 
-    # The target joined as written onto its template dir (`..` kept, symlinks not resolved).
+    # The target joined as written onto its template dir (`..` kept, symlinks not resolved), made relative to the
+    # entry module's dir so the result does not depend on where the project sits on the machine.
     resources: dict[str, str] = {}
     for module_name, plain_source_tree in chain:
         resources_list: list[dict] = []
@@ -114,7 +117,8 @@ def parse_spec(plain_file_path: str, template_dir: str | None, load_resources: b
             loaders.load_linked_resources(template_dirs, resources_list, module_name)
         for resource in resources_list:
             target = resource["target"]
-            resources[target] = loaders.resolve_linked_resource(template_dirs, target)
+            resource_dir = loaders.find_resource_dir(template_dirs, target)
+            resources[target] = loaders.relative_resource_path(template_dirs[0], resource_dir, target)
 
     _, top_plain_source_tree = chain[-1]
     for frid in plain_spec.get_frids(top_plain_source_tree):

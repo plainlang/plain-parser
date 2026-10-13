@@ -5,7 +5,13 @@ import tempfile
 import pytest
 
 from plain_parser.exceptions import UnsupportedBase64Content, UnsupportedResourceType
-from plain_parser.loaders import MAX_BASE64_BLOB_LENGTH, load_linked_resources, resolve_linked_resource
+from plain_parser.loaders import (
+    MAX_BASE64_BLOB_LENGTH,
+    find_resource_dir,
+    load_linked_resources,
+    relative_resource_path,
+    resolve_linked_resource,
+)
 
 
 @pytest.fixture
@@ -182,3 +188,28 @@ def test_liquid_error_message_without_position():
 
     error = LiquidSyntaxError("missing expression", token=None)
     assert liquid_error_message(error) == "Plain syntax error: Invalid Liquid: missing expression"
+
+
+def test_find_resource_dir_returns_the_dir_not_the_joined_path():
+    with tempfile.TemporaryDirectory() as first, tempfile.TemporaryDirectory() as second:
+        with open(os.path.join(second, "notes.md"), "w") as f:
+            f.write("x")
+
+        assert find_resource_dir([first, second], "notes.md") == second
+        assert find_resource_dir([first], "notes.md") is None
+
+
+def test_relative_resource_path_in_the_base_dir_is_the_target():
+    assert relative_resource_path("/p/spec", "/p/spec", "notes.md") == "notes.md"
+    assert relative_resource_path("/p/spec", "/p/spec", "../shared.md") == "../shared.md"
+
+
+def test_relative_resource_path_prefixes_the_dir_lexically_and_keeps_the_target():
+    assert relative_resource_path("/p/app/python", "/p/tpl", "notes.md") == "../../tpl/notes.md"
+    assert relative_resource_path("/p/app/python", "/p/tpl", "../sub.md") == "../../tpl/../sub.md"
+    assert relative_resource_path("/p/spec", "/p/spec/tpl/sub", "deep.md") == "tpl/sub/deep.md"
+
+
+def test_relative_resource_path_falls_back_to_absolute_with_forward_slashes(monkeypatch):
+    monkeypatch.setattr(os.path, "relpath", lambda *args: (_ for _ in ()).throw(ValueError("different drives")))
+    assert relative_resource_path("/p/spec", "/q/tpl", "notes.md") == "/q/tpl/notes.md"

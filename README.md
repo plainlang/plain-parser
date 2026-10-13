@@ -50,8 +50,12 @@ $ plain-parser parse my_spec.plain
 - `format_version`: `1`.
 - `modules`: every module in the `requires` chain, in build order: deepest ancestor first, the module itself last.
   Each entry has the module name and its specification tree, in the shape described under *Python* below.
-- `resources`: every linked-resource target in the chain, as written in the spec, mapped to the absolute path it
-  resolves to. Two spellings of one file (`notes.md`, `./notes.md`) are two keys.
+- `resources`: every linked-resource target in the chain, as written in the spec, mapped to the path it resolves
+  to, relative to the entry module's directory, with `/` as separator: `notes.md` when found next to the module,
+  `../tpl/notes.md` when found in a template directory. The directory part is lexical (symlinks not resolved) and
+  the target is appended as written (`..` kept), so joining the value onto the entry module's directory names the
+  file the parser matched. When no relative path exists (another drive on Windows) the value is the absolute path,
+  still with `/`. Two spellings of one file (`notes.md`, `./notes.md`) are two keys.
 
 Exit `0` on success. On a parser error the JSON is `{"format_version": 1, "type": "<error class>",
 "message": "…"}` and the exit code is `1`.
