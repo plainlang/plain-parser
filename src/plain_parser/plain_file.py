@@ -100,37 +100,42 @@ def remove_quotes(token):
     token.children = tuple(new_children)
 
 
-def find_linked_resources(tokens, template_dirs) -> list[dict]:
-    """The links in the tokens, each checked to be a relative path to an existing file that is not a .plain file."""
+def find_linked_resources(tokens, template_dirs, where: str = "") -> list[dict]:
+    """The links in the tokens, each checked to be a relative path to an existing file that is not a .plain file.
+
+    ``where`` names the place of the links in error messages, e.g. " in test plain file 'tests/m/f.plain'".
+    """
     linked_resources = []
     for link in (link for token in tokens for link in traverse(token, klass=Link)):
         parsed_url = urlparse(link.node.target)
         if parsed_url.scheme != "" or os.path.isabs(link.node.target):
             raise PlainSyntaxError(
-                f"Plain syntax error: Only relative links are allowed (text: {link.node.children[0].content}, target: {link.node.target})."
+                f"Plain syntax error: Only relative links are allowed{where} (text: {link.node.children[0].content}, target: {link.node.target})."
             )
 
         resolved_target = loaders.resolve_linked_resource(template_dirs, link.node.target)
         if resolved_target is None:
             searched_dirs = "\n".join(f"  {position}. {dir}" for position, dir in enumerate(template_dirs, start=1))
             raise PlainSyntaxError(
-                f"Plain syntax error: Link {link.node.target} does not exist. "
+                f"Plain syntax error: Link {link.node.target}{where} does not exist. "
                 f"Linked resources are looked up relative to the following directories "
                 f"(highest to lowest precedence):\n{searched_dirs}"
             )
 
         if not os.path.isfile(resolved_target):
             raise PlainSyntaxError(
-                f"Plain syntax error: Link {link.node.target} must be a file (resolved to {resolved_target})."
+                f"Plain syntax error: Link {link.node.target}{where} must be a file (resolved to {resolved_target})."
             )
 
         if len(link.node.children) != 1:
-            raise PlainSyntaxError(f"Plain syntax error: Link must have text specified (link: {link.node.target}).")
+            raise PlainSyntaxError(
+                f"Plain syntax error: Link{where} must have text specified (link: {link.node.target})."
+            )
 
         linked_resource_file_extension = os.path.splitext(os.path.basename(link.node.target))[1]
         if linked_resource_file_extension == ".plain":
             raise PlainSyntaxError(
-                f"Referenced resource '{link.node.target}' is a .plain file. "
+                f"Referenced resource '{link.node.target}'{where} is a .plain file. "
                 f"Referencing .plain files through Linked Resources is not supported. "
                 "Please use the import section to include definitions or implementation/test requirements from another module."
             )
@@ -156,17 +161,18 @@ def check_for_linked_resources(plain_source, template_dirs):
         functionality.linked_resources = find_linked_resources(functionality.body, template_dirs)
 
 
-def process_section_code_variables(section, code_variables):
-    if "markdown" not in section:
+def process_section_code_variables(section, code_variables, text_key="markdown"):
+    """Put `{{ name }}` placeholders back into the section text and record the code variables it uses."""
+    if text_key not in section:
         return
 
     code_variables_array = []
     for key, value in code_variables.items():
-        if key not in section["markdown"]:
+        if key not in section[text_key]:
             continue
 
         variable_name = next(iter(value))
-        section["markdown"] = section["markdown"].replace(key, f"{{{{ {variable_name} }}}}")
+        section[text_key] = section[text_key].replace(key, f"{{{{ {variable_name} }}}}")
 
         code_variables_array.append({"name": variable_name, "value": value[variable_name]})
 
