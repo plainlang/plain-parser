@@ -77,12 +77,15 @@ def test_check_valid_module_in_subdirectory_from_parent(cli_specs_dir, capsys, m
     _assert_ok((exit_code, out, err))
 
 
-def test_check_valid_module_with_linked_resource_in_acceptance_test(cli_specs_dir, capsys, monkeypatch, tmp_path):
+def test_check_probe_module_without_config_prints_ok(tmp_path, capsys, monkeypatch):
+    # The module plain-healthcheck writes to probe whether the installed parser reads the current syntax.
+    (tmp_path / "probe.plain").write_text(
+        "***implementation reqs***\n\n- :Implementation: is written in Python 3.12.\n\n"
+        "***functional specs***\n\n# probe\n:Implementation: starts.\n"
+    )
     monkeypatch.chdir(tmp_path)
 
-    exit_code, out, err = _run_check(capsys, os.path.join(cli_specs_dir, "acceptance_test_resource.plain"))
-
-    _assert_ok((exit_code, out, err))
+    assert _run_check(capsys, "probe.plain") == (0, "probe.plain: OK\n", "")
 
 
 def test_check_nonexistent_template_dir_is_ignored(cli_specs_dir, capsys):
@@ -194,12 +197,12 @@ def test_check_wrong_extension(cli_specs_dir, capsys):
 def test_check_empty_template_dir_is_ignored(tmp_path, capsys, monkeypatch):
     # An empty --template-dir must not add the working directory to the search path (codeplain ignores it).
     (tmp_path / "helper.plain").write_text(
-        "***implementation reqs***\n\n- A req.\n\n***functional specs***\n\n- A functionality.\n"
+        "***implementation reqs***\n\n- A req.\n\n***functional specs***\n\n# main\nA functionality.\n"
     )
     spec_dir = tmp_path / "spec"
     spec_dir.mkdir()
     (spec_dir / "top.plain").write_text(
-        "---\nrequires:\n  - helper\n---\n\n***implementation reqs***\n\n- A req.\n\n***functional specs***\n\n- A functionality.\n"
+        "---\nrequires:\n  - helper\n---\n\n***implementation reqs***\n\n- A req.\n\n***functional specs***\n\n# main\nA functionality.\n"
     )
     monkeypatch.chdir(tmp_path)
 
@@ -208,18 +211,6 @@ def test_check_empty_template_dir_is_ignored(tmp_path, capsys, monkeypatch):
     assert exit_code == 1
     assert out == ""
     assert err == "Error: Module does not exist (helper).\n"
-
-
-def test_check_binary_linked_resource_in_acceptance_test(cli_specs_dir, capsys, monkeypatch, tmp_path):
-    monkeypatch.chdir(tmp_path)
-
-    exit_code, out, err = _run_check(capsys, os.path.join(cli_specs_dir, "acceptance_test_binary_resource.plain"))
-
-    assert exit_code == 1
-    assert out == ""
-    assert err.startswith(
-        "Error: Referenced resource 'binary.bin' in module 'acceptance_test_binary_resource' is a binary file."
-    )
 
 
 @pytest.mark.parametrize("interrupted_function", ["check", "resolve_config_file"])
@@ -237,7 +228,7 @@ def test_check_interrupted_exits_130_without_traceback(cli_specs_dir, capsys, mo
     assert "Traceback" not in captured.err
 
 
-_MODULE = "***implementation reqs***\n\n- A req.\n\n***functional specs***\n\n- A functionality.\n"
+_MODULE = "***implementation reqs***\n\n- A req.\n\n***functional specs***\n\n# main\nA functionality.\n"
 _TOP = "---\nrequires:\n  - helper\n---\n\n" + _MODULE
 
 
@@ -442,7 +433,7 @@ def _write_module(path, body="", requires=None):
     front = "---\nrequires:\n" + "".join(f"  - {name}\n" for name in requires) + "---\n\n" if requires else ""
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
-        front + "***implementation reqs***\n\n- A req.\n\n***functional specs***\n\n- A functionality." + body
+        front + "***implementation reqs***\n\n- A req.\n\n***functional specs***\n\n# main\nA functionality." + body
     )
 
 

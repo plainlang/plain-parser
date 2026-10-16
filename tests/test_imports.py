@@ -49,5 +49,13 @@ def test_diamond_imports(load_test_data, get_test_data_path):
             {"markdown": "- :Import1Def: is tested in diamond_import_1."},
             {"markdown": "- :Import2Def: is tested in diamond_import_2."},
         ],
-        "functional specs": [{"markdown": '- Display "hello, world"'}],
+        "functional specs": [
+            {
+                "id": "display-hello-world",
+                "markdown": 'Display "hello, world"',
+                "linked_resources": [],
+                "conformance_tests": [],
+                "acceptance_tests": [],
+            }
+        ],
     }

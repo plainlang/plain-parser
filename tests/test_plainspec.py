@@ -98,7 +98,7 @@ def test_get_specifications_simple(get_test_data_path):
         "definitions": [],
         "implementation reqs": ["- Simple implementation requirement"],
         "test reqs": [],
-        "functional specs": ["- Simple functionality"],
+        "functional specs": ["Simple functionality"],
     }
 
 

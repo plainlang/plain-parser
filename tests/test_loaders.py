@@ -173,7 +173,7 @@ def test_get_loaded_templates_unterminated_output_raises_plain_syntax_error():
 
     with pytest.raises(
         PlainSyntaxError,
-        match=re.escape("Plain syntax error: Invalid Liquid at unterminated_output:4:0: "),
+        match=re.escape("Plain syntax error: Invalid Liquid at unterminated_output:5:0: "),
     ):
         get_loaded_templates([directory], source, "unterminated_output")
 

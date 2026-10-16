@@ -8,6 +8,8 @@
 
 ***functional specs***
 
-- :App: greets the :User:.
+# app-greets-the-user
+:App: greets the :User:.
 
-- :App: says goodbye to the :Visitor:.
+# app-says-goodbye-to-the
+:App: says goodbye to the :Visitor:.
