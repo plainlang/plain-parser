@@ -1,4 +1,5 @@
-"""Command-line entry point: ``plain-parser {check,parse} <file.plain> [--template-dir DIR] [--config-name NAME]``."""
+"""Command-line entry point: ``plain-parser {check,parse} <file.plain> [--template-dir DIR] [--test-dir DIR]...
+[--config-name NAME]``."""
 
 import argparse
 import json
@@ -15,7 +16,7 @@ TEMPLATE_DIR_CONFIG_KEYS = ("template_dir", "template-dir")
 TEST_DIR_CONFIG_KEYS = ("test_dir", "test-dir")
 CONFORMANCE_TESTS_SCRIPT_CONFIG_KEYS = ("conformance_tests_script", "conformance-tests-script")
 DEFAULT_TEST_DIR = "tests"
-PARSE_FORMAT_VERSION = 1
+PARSE_FORMAT_VERSION = 2
 
 
 class AmbiguousConfigFileError(Exception):
@@ -28,13 +29,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     check_parser = subparsers.add_parser(
         "check",
-        help="Validate a .plain module and its requires chain, and read every linked file: "
+        help="Validate a .plain module, its requires chain and its test plain files, and read every linked file: "
         "binary files and large base64 blobs are rejected.",
     )
     parse_parser = subparsers.add_parser(
         "parse",
-        help="Print the parse result of a .plain module and its requires chain as JSON. Linked files are "
-        "located but never read.",
+        help="Print the parse result of a .plain module, its requires chain and its test plain files as JSON. "
+        "Linked files are located but never read.",
     )
     for subparser in (check_parser, parse_parser):
         subparser.add_argument("plain_file", help="Path to the .plain module.")
@@ -44,10 +45,17 @@ def build_parser() -> argparse.ArgumentParser:
             "Overrides the template-dir value of the config file.",
         )
         subparser.add_argument(
+            "--test-dir",
+            action="append",
+            metavar="DIR",
+            help="Directory scanned for test plain files; repeat the option for more than one. Overrides the "
+            f"test-dir value of the config file. Defaults to {DEFAULT_TEST_DIR} next to the .plain file.",
+        )
+        subparser.add_argument(
             "--config-name",
             default=DEFAULT_CONFIG_NAME,
-            help="Name of the config file to read template-dir from. Looked up in the .plain file's directory "
-            "and the current working directory. Defaults to %(default)s.",
+            help="Name of the config file to read template-dir, test-dir and conformance-tests-script from. "
+            "Looked up in the .plain file's directory and the current working directory. Defaults to %(default)s.",
         )
     return parser
 
@@ -209,6 +217,7 @@ def parse(
             "format_version": PARSE_FORMAT_VERSION,
             "modules": [{"module": module_name, "tree": tree} for module_name, tree in result.modules],
             "resources": result.resources,
+            "test_plain_files": result.test_plain_files,
         }
         exit_code = 0
     except Exception as e:
@@ -265,9 +274,10 @@ def main(argv: list[str] | None = None) -> int:
         # The config file is resolved even when --template-dir is given, so an ambiguous config is always an error.
         config = _read_config(parser, args)
         template_dir = args.template_dir or config.template_dir
+        test_dirs = args.test_dir or config.test_dirs
         if args.command == "parse":
-            return parse(args.plain_file, template_dir, config.test_dirs, config.conformance_tests_enabled)
-        check(args.plain_file, template_dir, config.test_dirs, config.conformance_tests_enabled)
+            return parse(args.plain_file, template_dir, test_dirs, config.conformance_tests_enabled)
+        check(args.plain_file, template_dir, test_dirs, config.conformance_tests_enabled)
     except KeyboardInterrupt:
         return 130
     except Exception as e:

@@ -437,6 +437,29 @@ def test_check_link_in_scenario_is_read(project_dir, tmp_path, capsys):
     assert err.startswith("Error: Referenced resource 'listing.bin' in module 'todo' is a binary file.")
 
 
+def test_check_test_dir_option_overrides_the_config_and_the_default(project_dir, tmp_path, capsys, monkeypatch):
+    copy = _copy_project(project_dir, tmp_path)
+    (copy / "tests").rename(copy / "scenarios")
+    (copy / "config.yaml").write_text("conformance-tests-script: run.sh\ntest-dir: does_not_exist\n")
+    monkeypatch.chdir(tmp_path)  # the option is relative to the working directory
+
+    assert "todo:add-task has no conformance scenario" in _run_check(capsys, "project/todo.plain")[2]
+    _assert_ok(_run_check(capsys, "project/todo.plain", "--test-dir", "project/scenarios"))
+
+
+def test_check_test_dir_option_can_be_repeated(project_dir, tmp_path, capsys):
+    copy = _copy_project(project_dir, tmp_path)
+    (copy / "more").mkdir()
+    (copy / "tests" / "todo" / "list-tasks.plain").rename(copy / "more" / "list-tasks.plain")
+
+    assert "todo:list-tasks has no conformance scenario" in _run_check(capsys, str(copy / "todo.plain"))[2]
+    _assert_ok(
+        _run_check(
+            capsys, str(copy / "todo.plain"), "--test-dir", str(copy / "tests"), "--test-dir", str(copy / "more")
+        )
+    )
+
+
 def test_check_reports_ancestor_resource_before_frid_walk_error(cli_specs_dir, capsys):
     # base.plain links a binary file; top.plain also has a code-variable conflict only the FRID walk finds.
     spec = os.path.join(cli_specs_dir, "resource_before_frid_walk", "top.plain")
@@ -473,9 +496,10 @@ def test_parse_valid_module_prints_success_json(cli_specs_dir, capsys):
 
     assert (exit_code, err) == (0, "")
     result = _parse_output(out)
-    assert set(result) == {"format_version", "modules", "resources"}
-    assert result["format_version"] == 1
+    assert set(result) == {"format_version", "modules", "resources", "test_plain_files"}
+    assert result["format_version"] == 2
     assert result["resources"] == {}
+    assert result["test_plain_files"] == {}
     _, tree = plain_file.parse_module_chain("valid.plain", [cli_specs_dir])[-1]
     assert result["modules"] == [{"module": "valid", "tree": json.loads(json.dumps(tree))}]
 
@@ -488,7 +512,7 @@ def test_parse_invalid_module_prints_error_json(cli_specs_dir, capsys):
     assert (exit_code, err) == (1, "")
     result = _parse_output(out)
     assert set(result) == {"format_version", "type", "message"}
-    assert result["format_version"] == 1
+    assert result["format_version"] == 2
     assert result["type"] == "PlainSyntaxError"
     _, _, check_err = _run_check(capsys, spec)
     assert check_err == f"Error: {result['message']}\n"
@@ -570,6 +594,54 @@ def test_parse_lists_a_target_linked_from_two_modules_once(cli_specs_dir, capsys
     result = _parse_output(out)
     assert _module_names(result) == ["shared_link_helper", "shared_link_top"]
     assert result["resources"] == {"notes.md": "notes.md"}
+
+
+def test_parse_lists_the_test_plain_files_and_merges_their_scenarios(project_dir, capsys, monkeypatch):
+    monkeypatch.chdir(project_dir)
+
+    exit_code, out, err = _run_parse(capsys, "todo.plain")
+
+    assert (exit_code, err) == (0, "")
+    result = _parse_output(out)
+    assert result["test_plain_files"] == {
+        "tests/todo/add-task.plain": {"module": "todo", "func_id": "add-task"},
+        "tests/todo/list-tasks.plain": {"module": "todo", "func_id": "list-tasks"},
+    }
+    functionalities = {item["id"]: item for item in result["modules"][0]["tree"]["functional specs"]}
+    assert [scenario["id"] for scenario in functionalities["add-task"]["conformance_tests"]] == [
+        "add-first-task",
+        "add-without-name",
+    ]
+    assert [scenario["id"] for scenario in functionalities["add-task"]["acceptance_tests"]] == ["add-then-list"]
+    assert functionalities["list-tasks"]["conformance_tests"][0]["text"] == (
+        "With two :Task: items added, `todo list` prints two lines, lowest id first, and exits with status 0."
+    )
+
+
+def test_parse_resources_include_the_links_of_the_scenarios(project_dir, tmp_path, capsys):
+    copy = _copy_project(project_dir, tmp_path)
+    (copy / "tests" / "todo" / "list-tasks.plain").write_text(
+        "---\nmodule: todo\nfunc_id: list-tasks\n---\n\n***conformance tests***\n\n# lists\n"
+        "The output is [the listing](listing.txt).\n\n***acceptance tests***\n"
+    )
+    (copy / "listing.txt").write_text("1 Buy milk\n")
+
+    exit_code, out, _ = _run_parse(capsys, str(copy / "todo.plain"))
+
+    assert exit_code == 0
+    assert _parse_output(out)["resources"] == {"listing.txt": "listing.txt"}
+
+
+def test_parse_missing_conformance_scenario_is_a_parser_error(project_dir, tmp_path, capsys):
+    copy = _copy_project(project_dir, tmp_path)
+    (copy / "tests" / "todo" / "list-tasks.plain").unlink()
+
+    exit_code, out, _ = _run_parse(capsys, str(copy / "todo.plain"))
+
+    assert exit_code == 1
+    result = _parse_output(out)
+    assert result["type"] == "MissingConformanceScenariosError"
+    assert "add-test-scenarios" in result["message"]
 
 
 def test_parse_without_file_argument_is_usage_error(capsys):
