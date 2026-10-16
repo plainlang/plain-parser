@@ -434,6 +434,7 @@ def read_sections(  # noqa: C901
     current_specification_heading = None
     current_functionality: Functionality | None = None
     processed_specification_headings = set[str]()
+    functionality_lines: dict[str, int] = {}  # func-id to the line of its heading
 
     def close_functionality():
         if current_functionality is not None and not current_functionality.body:
@@ -457,7 +458,18 @@ def read_sections(  # noqa: C901
                     f"Plain syntax error: {where}: Invalid heading level {token.level} (`{token_text}`). "
                     f"A functionality heading is `# <func-id>`."
                 )
+            if not plain_spec.is_semantic_id(token_text):
+                raise PlainSyntaxError(
+                    f"Plain syntax error: {where}: Invalid func-id (`{token_text}`). A func-id has only lowercase "
+                    f"letters, digits and hyphens."
+                )
+            if token_text in functionality_lines:
+                raise PlainSyntaxError(
+                    f"Plain syntax error: {where}: Duplicate func-id `{token_text}`; it is first used at line "
+                    f"{functionality_lines[token_text]}."
+                )
             close_functionality()
+            functionality_lines[token_text] = token.line_number
             current_functionality = Functionality(token_text, token.line_number)
             plain_source[plain_spec.FUNCTIONAL_REQUIREMENTS].append(current_functionality)
         elif isinstance(token, Paragraph):

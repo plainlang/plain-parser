@@ -641,6 +641,34 @@ def test_heading_of_another_level_is_rejected():
         plain_file.parse_plain_source(plain_source, {}, [], [], [])
 
 
+def test_func_id_with_other_characters_is_rejected(get_test_data_path):
+    with pytest.raises(PlainSyntaxError) as exc_info:
+        plain_file.plain_file_parser("func_id_invalid.plain", [get_test_data_path("data/plainfileparser")])
+
+    assert str(exc_info.value) == (
+        "Plain syntax error: Syntax error at line 10 in module 'func_id_invalid': Invalid func-id (`Add Task 2`). "
+        "A func-id has only lowercase letters, digits and hyphens."
+    )
+
+
+@pytest.mark.parametrize("heading", ["#", "# ", "# add_task", "# add-task!", "# Ädd"])
+def test_func_id_syntax_is_checked(heading):
+    plain_source = _SPEC_HEAD + f"***functional specs***\n\n{heading}\nA :Task: can be added.\n"
+
+    with pytest.raises(PlainSyntaxError, match="Syntax error at line 11: Invalid func-id"):
+        plain_file.parse_plain_source(plain_source, {}, [], [], [])
+
+
+def test_duplicate_func_id_is_rejected(get_test_data_path):
+    with pytest.raises(PlainSyntaxError) as exc_info:
+        plain_file.plain_file_parser("func_id_duplicate.plain", [get_test_data_path("data/plainfileparser")])
+
+    assert str(exc_info.value) == (
+        "Plain syntax error: Syntax error at line 13 in module 'func_id_duplicate': Duplicate func-id `add-task`; "
+        "it is first used at line 7."
+    )
+
+
 @pytest.mark.parametrize("content", ["A :Task: can be added.", "  - A :Task: can be added."])
 def test_content_before_the_first_heading_is_rejected(content):
     plain_source = _SPEC_HEAD + f"***functional specs***\n\n{content}\n\n# add-task\nA :Task: can be added.\n"

@@ -1,5 +1,6 @@
 import hashlib
 import json
+import re
 import uuid
 from typing import Optional
 
@@ -22,6 +23,13 @@ LIST_SECTION_HEADINGS = [DEFINITIONS, NON_FUNCTIONAL_REQUIREMENTS, TEST_REQUIREM
 ALLOWED_SPECIFICATION_HEADINGS = [*LIST_SECTION_HEADINGS, FUNCTIONAL_REQUIREMENTS]
 
 ALLOWED_IMPORT_SPECIFICATION_HEADINGS = LIST_SECTION_HEADINGS
+
+# A func-id or scenario-id: lowercase letters, digits and hyphens.
+SEMANTIC_ID_PATTERN = re.compile(r"[a-z0-9-]+")
+
+
+def is_semantic_id(text: str) -> bool:
+    return SEMANTIC_ID_PATTERN.fullmatch(text) is not None
 
 
 def has_acceptance_tests(plain_source_tree) -> bool:
