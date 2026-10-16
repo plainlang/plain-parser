@@ -1,6 +1,6 @@
 """Parser for ***plain specification files."""
 
-from plain_parser import concept_utils, exceptions, loaders, plain_file, plain_spec, test_plain_file
+from plain_parser import concept_utils, exceptions, loaders, plain_file, plain_spec, project, test_plain_file
 from plain_parser.plain_file import (
     PlainFileParseResult,
     get_filename_from_module_name,
@@ -26,5 +26,6 @@ __all__ = [
     "plain_file",
     "plain_file_parser",
     "plain_spec",
+    "project",
     "test_plain_file",
 ]

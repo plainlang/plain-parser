@@ -337,6 +337,106 @@ def test_check_valid_module_prints_ok_line_with_file_as_given(cli_specs_dir, cap
     assert (exit_code, out, err) == (0, "valid.plain: OK\n", "")
 
 
+@pytest.fixture
+def project_dir(cli_specs_dir):
+    # todo.plain with two functionalities, a config.yaml naming a conformance-tests-script, and one test plain file
+    # per functionality under tests/todo/.
+    return os.path.join(cli_specs_dir, "project")
+
+
+def _copy_project(project_dir, tmp_path):
+    copy = tmp_path / "project"
+    shutil.copytree(project_dir, copy)
+    return copy
+
+
+def test_check_project_with_test_plain_files_prints_ok(project_dir, capsys, monkeypatch):
+    monkeypatch.chdir(project_dir)
+
+    assert _run_check(capsys, "todo.plain") == (0, "todo.plain: OK\n", "")
+
+
+def test_check_missing_conformance_scenario_names_the_functionality_and_the_skill(project_dir, tmp_path, capsys):
+    copy = _copy_project(project_dir, tmp_path)
+    (copy / "tests" / "todo" / "list-tasks.plain").unlink()
+
+    exit_code, out, err = _run_check(capsys, str(copy / "todo.plain"))
+
+    assert (exit_code, out) == (1, "")
+    assert err == (
+        "Error: Functionality todo:list-tasks has no conformance scenario. Add one in a test plain file "
+        "(by convention tests/todo/list-tasks.plain) with the add-test-scenarios skill.\n"
+    )
+
+
+def test_check_without_conformance_tests_script_needs_no_scenarios(project_dir, tmp_path, capsys):
+    copy = _copy_project(project_dir, tmp_path)
+    shutil.rmtree(copy / "tests")
+    (copy / "config.yaml").write_text("unittests-script: test_scripts/run_unittests.sh\n")
+
+    _assert_ok(_run_check(capsys, str(copy / "todo.plain")))
+
+
+def test_check_test_plain_file_error_is_reported_with_its_file(project_dir, tmp_path, capsys):
+    copy = _copy_project(project_dir, tmp_path)
+    (copy / "tests" / "todo" / "list-tasks.plain").write_text(
+        "---\nmodule: todo\nfunc_id: list-tasks\n---\n\n***conformance tests***\n\n# lists\nIt lists a :Note:.\n\n"
+        "***acceptance tests***\n"
+    )
+
+    exit_code, out, err = _run_check(capsys, str(copy / "todo.plain"))
+
+    assert (exit_code, out) == (1, "")
+    assert err == (
+        "Error: Plain syntax error: Found 1 errors in test plain file 'tests/todo/list-tasks.plain':\n"
+        "Syntax error at line 8 in test plain file 'tests/todo/list-tasks.plain': Concept :Note: used in scenario "
+        "`lists` is not defined in module 'todo'.\n"
+    )
+
+
+@pytest.mark.parametrize(
+    "config_text",
+    [
+        "conformance-tests-script: run.sh\ntest-dir: scenarios\n",
+        "conformance_tests_script: run.sh\ntest_dir: scenarios\n",
+        "conformance-tests-script: run.sh\ntest-dir:\n  - scenarios\n  - more\n",
+    ],
+)
+def test_check_reads_test_dir_from_config(project_dir, tmp_path, capsys, monkeypatch, config_text):
+    copy = _copy_project(project_dir, tmp_path)
+    (copy / "tests").rename(copy / "scenarios")
+    (copy / "config.yaml").write_text(config_text)
+    monkeypatch.chdir(tmp_path)  # not the project dir: the relative value must resolve against the config file
+
+    _assert_ok(_run_check(capsys, str(copy / "todo.plain")))
+    (copy / "scenarios" / "todo" / "add-task.plain").unlink()
+    assert "todo:add-task has no conformance scenario" in _run_check(capsys, str(copy / "todo.plain"))[2]
+
+
+def test_check_config_test_dir_replaces_the_default(project_dir, tmp_path, capsys):
+    copy = _copy_project(project_dir, tmp_path)
+    (copy / "config.yaml").write_text("conformance-tests-script: run.sh\ntest-dir: scenarios\n")
+
+    exit_code, _, err = _run_check(capsys, str(copy / "todo.plain"))
+
+    assert exit_code == 1
+    assert "todo:add-task has no conformance scenario" in err
+
+
+def test_check_link_in_scenario_is_read(project_dir, tmp_path, capsys):
+    copy = _copy_project(project_dir, tmp_path)
+    (copy / "tests" / "todo" / "list-tasks.plain").write_text(
+        "---\nmodule: todo\nfunc_id: list-tasks\n---\n\n***conformance tests***\n\n# lists\n"
+        "The output is [the listing](listing.bin).\n\n***acceptance tests***\n"
+    )
+    (copy / "listing.bin").write_bytes(b"\x00\xff\xfe")
+
+    exit_code, _, err = _run_check(capsys, str(copy / "todo.plain"))
+
+    assert exit_code == 1
+    assert err.startswith("Error: Referenced resource 'listing.bin' in module 'todo' is a binary file.")
+
+
 def test_check_reports_ancestor_resource_before_frid_walk_error(cli_specs_dir, capsys):
     # base.plain links a binary file; top.plain also has a code-variable conflict only the FRID walk finds.
     spec = os.path.join(cli_specs_dir, "resource_before_frid_walk", "top.plain")

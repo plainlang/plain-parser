@@ -37,3 +37,9 @@ class ImportedModuleWithFunctionalitiesError(Exception):
     """
 
     pass
+
+
+class MissingConformanceScenariosError(Exception):
+    """Raised when conformance tests are enabled and a functionality has no conformance scenario."""
+
+    pass
