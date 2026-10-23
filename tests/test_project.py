@@ -149,7 +149,7 @@ def test_unknown_func_id_is_rejected(tmp_path):
 
     assert str(exc_info.value) == (
         "Plain syntax error: Test plain file 'tests/a.plain' binds to functionality 'todo:delete-task', which "
-        "module 'todo' does not have. Run the add-test-scenarios skill to update the file."
+        "module 'todo' does not have."
     )
 
 

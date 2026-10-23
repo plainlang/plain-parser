@@ -18,7 +18,6 @@ MODULE_KEY = "module"
 FUNC_ID_KEY = "func_id"
 FRONTMATTER_KEYS = (MODULE_KEY, FUNC_ID_KEY)
 SECTION_HEADINGS = (plain_spec.CONFORMANCE_TEST_HEADING, plain_spec.ACCEPTANCE_TEST_HEADING)
-TEST_SCENARIOS_HINT = "Run the add-test-scenarios skill to update the file."
 
 
 @dataclass
@@ -72,7 +71,7 @@ def read_metadata(plain_source_text: str, name: str) -> frontmatter.Post:
 
     for key in FRONTMATTER_KEYS:
         if key not in post.metadata:
-            raise _error(f"Test plain file '{name}' has no `{key}:` key in its frontmatter. {TEST_SCENARIOS_HINT}")
+            raise _error(f"Test plain file '{name}' has no `{key}:` key in its frontmatter.")
         value = post.metadata[key]
         if not isinstance(value, str) or not value.strip():
             raise _error(f"Test plain file '{name}': the frontmatter key `{key}:` must be a non-empty string.")
@@ -169,7 +168,7 @@ def read_scenarios(rendered_text: str, name: str) -> dict[str, list[Scenario]]: 
 
     for heading in SECTION_HEADINGS:
         if heading not in sections:
-            raise _error(f"Test plain file '{name}' has no `***{heading}***` section. {TEST_SCENARIOS_HINT}")
+            raise _error(f"Test plain file '{name}' has no `***{heading}***` section.")
 
     return sections
 
@@ -183,7 +182,7 @@ def find_scenario_linked_resources(scenario: Scenario, template_dirs: list[str],
 def parse_test_plain_file_source(
     plain_source_text: str, name: str, template_dirs: list[str], code_variables: dict
 ) -> TestPlainFile:
-    """Parse the text of a test plain file. Liquid runs as on a core spec, with the same template directories;
+    """Parse the text of a test plain file. Liquid runs as on a spec plain file, with the same template directories;
     every link in a scenario is resolved against them. Concepts are not checked here, see
     validate_scenario_concepts."""
     plain_source_text = plain_file.normalize_line_endings(plain_source_text)

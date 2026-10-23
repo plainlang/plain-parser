@@ -329,7 +329,10 @@ def test_no_functional_specs_section(get_test_data_path):
 def test_empty_functional_specs_section(get_test_data_path):
     with pytest.raises(
         PlainSyntaxError,
-        match=re.escape("has an empty 'functional specs' section"),
+        match=re.escape(
+            "has a 'functional specs' section without a `# <func-id>` heading. A functionality is a `# <func-id>` "
+            "heading followed by its body; the previous syntax is not supported."
+        ),
     ):
         plain_file.plain_file_parser(
             "empty_functional_specs_section.plain",
@@ -580,7 +583,8 @@ def test_bullets_without_a_heading_are_the_previous_syntax(get_test_data_path):
 
     assert str(exc_info.value) == (
         "Plain syntax error: Syntax error at line 11 in module 'old_syntax_functional_specs': Content before the "
-        'first `# <func-id>` heading in the functional specs section (`Display "hello, world"`).'
+        'first `# <func-id>` heading in the functional specs section (`Display "hello, world"`). A functionality is '
+        "a `# <func-id>` heading followed by its body; the previous syntax is not supported."
     )
 
 
@@ -596,15 +600,15 @@ def test_flush_left_list_after_a_heading_is_body():
 
 
 @pytest.mark.parametrize("heading", ["acceptance tests", "conformance tests"])
-def test_test_section_in_core_spec_is_rejected(heading):
+def test_test_section_in_spec_plain_file_is_rejected(heading):
     plain_source = f"***definitions***\n\n- :Task: is a thing to do.\n\n***{heading}***\n\n# add\nAdding works.\n"
 
     with pytest.raises(PlainSyntaxError) as exc_info:
         plain_file.parse_plain_source(plain_source, {}, [], [], [])
 
     assert str(exc_info.value) == (
-        f"Plain syntax error: Syntax error at line 5: The `{heading}` section is not allowed in a core spec; "
-        "test scenarios live in test plain files. Run the migrate-plain-syntax skill to convert the project."
+        f"Plain syntax error: Syntax error at line 5: The `{heading}` section is not allowed in a spec plain file; "
+        "test scenarios live in test plain files."
     )
 
 
@@ -678,7 +682,8 @@ def test_content_before_the_first_heading_is_rejected(content):
         PlainSyntaxError,
         match=re.escape(
             "Syntax error at line 11: Content before the first `# <func-id>` heading in the functional specs section "
-            "(`A :Task: can be added.`)."
+            "(`A :Task: can be added.`). A functionality is a `# <func-id>` heading followed by its body; the "
+            "previous syntax is not supported."
         ),
     ):
         plain_file.parse_plain_source(plain_source, {}, [], [], [])

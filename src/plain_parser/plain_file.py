@@ -30,7 +30,9 @@ RESOURCE_MARKER = "[resource]"
 
 IMPORT_DIRECTIVE = "import"
 REQUIRES_DIRECTIVE = "requires"
-MIGRATION_HINT = "Run the migrate-plain-syntax skill to convert the project."
+PREVIOUS_SYNTAX_HINT = (
+    "A functionality is a `# <func-id>` heading followed by its body; the previous syntax is not supported."
+)
 REQUIRED_CONCEPTS_DIRECTIVE = "required_concepts"
 EXPORTED_CONCEPTS_DIRECTIVE = "exported_concepts"
 
@@ -406,13 +408,13 @@ TEST_PLAIN_FILE_SECTION_HEADINGS = (plain_spec.CONFORMANCE_TEST_HEADING, plain_s
 
 
 def check_no_test_sections(plain_source_full_text: str, module_name: str | None) -> None:
-    """Raise when a `***conformance tests***` or `***acceptance tests***` marker is anywhere in a core spec."""
+    """Raise when a `***conformance tests***` or `***acceptance tests***` marker is anywhere in a spec plain file."""
     for line_number, line in enumerate(plain_source_full_text.split("\n"), start=1):
         for heading in TEST_PLAIN_FILE_SECTION_HEADINGS:
             if line.strip() == f"***{heading}***":
                 raise PlainSyntaxError(
                     f"Plain syntax error: {syntax_error_at(line_number, module_name)}: The `{heading}` section is not "
-                    f"allowed in a core spec; test scenarios live in test plain files. {MIGRATION_HINT}"
+                    f"allowed in a spec plain file; test scenarios live in test plain files."
                 )
 
 
@@ -429,7 +431,7 @@ def section_marker(token: Paragraph) -> str | None:
 
 
 def read_sections(plain_source: dict, document: mistletoe.Document, module_name: str | None) -> None:  # noqa: C901
-    """Add the sections of the rendered core spec to ``plain_source``.
+    """Add the sections of the rendered spec plain file to ``plain_source``.
 
     A list section holds a mistletoe Document whose children are its list items; ``functional specs`` holds a list
     of Functionality items, one per `# <func-id>` heading, each with every block token up to the next heading or
@@ -489,7 +491,7 @@ def read_sections(plain_source: dict, document: mistletoe.Document, module_name:
                 if current_functionality is None:
                     raise PlainSyntaxError(
                         f"Plain syntax error: {where}: Content before the first `# <func-id>` heading in the "
-                        f"{plain_spec.FUNCTIONAL_REQUIREMENTS} section (`{token_text}`)."
+                        f"{plain_spec.FUNCTIONAL_REQUIREMENTS} section (`{token_text}`). {PREVIOUS_SYNTAX_HINT}"
                     )
                 current_functionality.body.append(token)
                 continue
@@ -529,7 +531,7 @@ def read_sections(plain_source: dict, document: mistletoe.Document, module_name:
             if current_functionality is None:
                 raise PlainSyntaxError(
                     f"Plain syntax error: {where}: Content before the first `# <func-id>` heading in the "
-                    f"{plain_spec.FUNCTIONAL_REQUIREMENTS} section (`{token_text}`)."
+                    f"{plain_spec.FUNCTIONAL_REQUIREMENTS} section (`{token_text}`). {PREVIOUS_SYNTAX_HINT}"
                 )
             current_functionality.body.append(token)
         else:
@@ -806,8 +808,8 @@ def validate_module_structure(plain_file_parse_result: PlainFileParseResult, mod
     if count_functionalities(plain_file_parse_result.plain_source) == 0:
         # ***functional specs*** section present but empty: invalid in every role. Syntax error.
         raise PlainSyntaxError(
-            f"Plain syntax error: Module '{module_name}' has an empty "
-            f"'{plain_spec.FUNCTIONAL_REQUIREMENTS}' section. At least one functionality must be specified."
+            f"Plain syntax error: Module '{module_name}' has a '{plain_spec.FUNCTIONAL_REQUIREMENTS}' section "
+            f"without a `# <func-id>` heading. {PREVIOUS_SYNTAX_HINT}"
         )
 
     validate_functionalities_have_implementation_reqs(

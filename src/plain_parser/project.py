@@ -96,8 +96,7 @@ def bind_test_plain_files(
         if functionality is None:
             raise PlainSyntaxError(
                 f"Plain syntax error: Test plain file '{name}' binds to functionality "
-                f"'{parsed.module}:{parsed.func_id}', which module '{parsed.module}' does not have. "
-                f"{test_plain_file.TEST_SCENARIOS_HINT}"
+                f"'{parsed.module}:{parsed.func_id}', which module '{parsed.module}' does not have."
             )
 
         concepts, _ = concept_utils.collect_concepts(tree)

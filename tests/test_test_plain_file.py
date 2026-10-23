@@ -69,7 +69,7 @@ def test_both_sections_may_be_empty(fixtures_dir):
         (
             "missing_acceptance_section.plain",
             "Plain syntax error: Test plain file 'missing_acceptance_section.plain' has no `***acceptance tests***` "
-            "section. Run the add-test-scenarios skill to update the file.",
+            "section.",
         ),
         (
             "sections_out_of_order.plain",
@@ -94,8 +94,7 @@ def test_both_sections_may_be_empty(fixtures_dir):
         ),
         (
             "missing_func_id.plain",
-            "Plain syntax error: Test plain file 'missing_func_id.plain' has no `func_id:` key in its frontmatter. "
-            "Run the add-test-scenarios skill to update the file.",
+            "Plain syntax error: Test plain file 'missing_func_id.plain' has no `func_id:` key in its frontmatter.",
         ),
         (
             "module_not_a_string.plain",

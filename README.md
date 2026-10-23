@@ -35,9 +35,9 @@ my_spec.plain: OK
 ```
 
 Exit `0` when the module is valid. On an error, `Error: …` is written to stderr and the exit code is `1`. The
-message names the file, the line where known, and the skill that fixes the problem: the old syntax (a flush-left
-`- ` list in `***functional specs***`, an `***acceptance tests***` section in a core spec) names
-`migrate-plain-syntax`, and a functionality without a conformance scenario names `add-test-scenarios`.
+message names the file and the line where known. The previous syntax (`- ` bullets instead of `# <func-id>`
+headings in `***functional specs***`, an `***acceptance tests***` section in a spec plain file) is reported as not
+supported. A functionality without a conformance scenario names the `add-test-scenarios` skill.
 
 ### `parse`
 
