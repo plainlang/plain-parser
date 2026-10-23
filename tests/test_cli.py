@@ -77,12 +77,15 @@ def test_check_valid_module_in_subdirectory_from_parent(cli_specs_dir, capsys, m
     _assert_ok((exit_code, out, err))
 
 
-def test_check_valid_module_with_linked_resource_in_acceptance_test(cli_specs_dir, capsys, monkeypatch, tmp_path):
+def test_check_probe_module_without_config_prints_ok(tmp_path, capsys, monkeypatch):
+    # The module plain-healthcheck writes to probe whether the installed parser reads the current syntax.
+    (tmp_path / "probe.plain").write_text(
+        "***implementation reqs***\n\n- :Implementation: is written in Python 3.12.\n\n"
+        "***functional specs***\n\n# probe\n:Implementation: starts.\n"
+    )
     monkeypatch.chdir(tmp_path)
 
-    exit_code, out, err = _run_check(capsys, os.path.join(cli_specs_dir, "acceptance_test_resource.plain"))
-
-    _assert_ok((exit_code, out, err))
+    assert _run_check(capsys, "probe.plain") == (0, "probe.plain: OK\n", "")
 
 
 def test_check_nonexistent_template_dir_is_ignored(cli_specs_dir, capsys):
@@ -194,12 +197,12 @@ def test_check_wrong_extension(cli_specs_dir, capsys):
 def test_check_empty_template_dir_is_ignored(tmp_path, capsys, monkeypatch):
     # An empty --template-dir must not add the working directory to the search path (codeplain ignores it).
     (tmp_path / "helper.plain").write_text(
-        "***implementation reqs***\n\n- A req.\n\n***functional specs***\n\n- A functionality.\n"
+        "***implementation reqs***\n\n- A req.\n\n***functional specs***\n\n# main\nA functionality.\n"
     )
     spec_dir = tmp_path / "spec"
     spec_dir.mkdir()
     (spec_dir / "top.plain").write_text(
-        "---\nrequires:\n  - helper\n---\n\n***implementation reqs***\n\n- A req.\n\n***functional specs***\n\n- A functionality.\n"
+        "---\nrequires:\n  - helper\n---\n\n***implementation reqs***\n\n- A req.\n\n***functional specs***\n\n# main\nA functionality.\n"
     )
     monkeypatch.chdir(tmp_path)
 
@@ -208,18 +211,6 @@ def test_check_empty_template_dir_is_ignored(tmp_path, capsys, monkeypatch):
     assert exit_code == 1
     assert out == ""
     assert err == "Error: Module does not exist (helper).\n"
-
-
-def test_check_binary_linked_resource_in_acceptance_test(cli_specs_dir, capsys, monkeypatch, tmp_path):
-    monkeypatch.chdir(tmp_path)
-
-    exit_code, out, err = _run_check(capsys, os.path.join(cli_specs_dir, "acceptance_test_binary_resource.plain"))
-
-    assert exit_code == 1
-    assert out == ""
-    assert err.startswith(
-        "Error: Referenced resource 'binary.bin' in module 'acceptance_test_binary_resource' is a binary file."
-    )
 
 
 @pytest.mark.parametrize("interrupted_function", ["check", "resolve_config_file"])
@@ -237,7 +228,7 @@ def test_check_interrupted_exits_130_without_traceback(cli_specs_dir, capsys, mo
     assert "Traceback" not in captured.err
 
 
-_MODULE = "***implementation reqs***\n\n- A req.\n\n***functional specs***\n\n- A functionality.\n"
+_MODULE = "***implementation reqs***\n\n- A req.\n\n***functional specs***\n\n# main\nA functionality.\n"
 _TOP = "---\nrequires:\n  - helper\n---\n\n" + _MODULE
 
 
@@ -346,6 +337,129 @@ def test_check_valid_module_prints_ok_line_with_file_as_given(cli_specs_dir, cap
     assert (exit_code, out, err) == (0, "valid.plain: OK\n", "")
 
 
+@pytest.fixture
+def project_dir(cli_specs_dir):
+    # todo.plain with two functionalities, a config.yaml naming a conformance-tests-script, and one test plain file
+    # per functionality under tests/todo/.
+    return os.path.join(cli_specs_dir, "project")
+
+
+def _copy_project(project_dir, tmp_path):
+    copy = tmp_path / "project"
+    shutil.copytree(project_dir, copy)
+    return copy
+
+
+def test_check_project_with_test_plain_files_prints_ok(project_dir, capsys, monkeypatch):
+    monkeypatch.chdir(project_dir)
+
+    assert _run_check(capsys, "todo.plain") == (0, "todo.plain: OK\n", "")
+
+
+def test_check_missing_conformance_scenario_names_the_functionality_and_the_skill(project_dir, tmp_path, capsys):
+    copy = _copy_project(project_dir, tmp_path)
+    (copy / "tests" / "todo" / "list-tasks.plain").unlink()
+
+    exit_code, out, err = _run_check(capsys, str(copy / "todo.plain"))
+
+    assert (exit_code, out) == (1, "")
+    assert err == (
+        "Error: Functionality todo:list-tasks has no conformance scenario. Add one in a test plain file "
+        "(by convention tests/todo/list-tasks.plain) with the add-test-scenarios skill.\n"
+    )
+
+
+def test_check_without_conformance_tests_script_needs_no_scenarios(project_dir, tmp_path, capsys):
+    copy = _copy_project(project_dir, tmp_path)
+    shutil.rmtree(copy / "tests")
+    (copy / "config.yaml").write_text("unittests-script: test_scripts/run_unittests.sh\n")
+
+    _assert_ok(_run_check(capsys, str(copy / "todo.plain")))
+
+
+def test_check_test_plain_file_error_is_reported_with_its_file(project_dir, tmp_path, capsys):
+    copy = _copy_project(project_dir, tmp_path)
+    (copy / "tests" / "todo" / "list-tasks.plain").write_text(
+        "---\nmodule: todo\nfunc_id: list-tasks\n---\n\n***conformance tests***\n\n# lists\nIt lists a :Note:.\n\n"
+        "***acceptance tests***\n"
+    )
+
+    exit_code, out, err = _run_check(capsys, str(copy / "todo.plain"))
+
+    assert (exit_code, out) == (1, "")
+    assert err == (
+        "Error: Plain syntax error: Found 1 errors in test plain file 'tests/todo/list-tasks.plain':\n"
+        "Syntax error at line 8 in test plain file 'tests/todo/list-tasks.plain': Concept :Note: used in scenario "
+        "`lists` is not defined in module 'todo'.\n"
+    )
+
+
+@pytest.mark.parametrize(
+    "config_text",
+    [
+        "conformance-tests-script: run.sh\ntest-dir: scenarios\n",
+        "conformance_tests_script: run.sh\ntest_dir: scenarios\n",
+        "conformance-tests-script: run.sh\ntest-dir:\n  - scenarios\n  - more\n",
+    ],
+)
+def test_check_reads_test_dir_from_config(project_dir, tmp_path, capsys, monkeypatch, config_text):
+    copy = _copy_project(project_dir, tmp_path)
+    (copy / "tests").rename(copy / "scenarios")
+    (copy / "config.yaml").write_text(config_text)
+    monkeypatch.chdir(tmp_path)  # not the project dir: the relative value must resolve against the config file
+
+    _assert_ok(_run_check(capsys, str(copy / "todo.plain")))
+    (copy / "scenarios" / "todo" / "add-task.plain").unlink()
+    assert "todo:add-task has no conformance scenario" in _run_check(capsys, str(copy / "todo.plain"))[2]
+
+
+def test_check_config_test_dir_replaces_the_default(project_dir, tmp_path, capsys):
+    copy = _copy_project(project_dir, tmp_path)
+    (copy / "config.yaml").write_text("conformance-tests-script: run.sh\ntest-dir: scenarios\n")
+
+    exit_code, _, err = _run_check(capsys, str(copy / "todo.plain"))
+
+    assert exit_code == 1
+    assert "todo:add-task has no conformance scenario" in err
+
+
+def test_check_link_in_scenario_is_read(project_dir, tmp_path, capsys):
+    copy = _copy_project(project_dir, tmp_path)
+    (copy / "tests" / "todo" / "list-tasks.plain").write_text(
+        "---\nmodule: todo\nfunc_id: list-tasks\n---\n\n***conformance tests***\n\n# lists\n"
+        "The output is [the listing](listing.bin).\n\n***acceptance tests***\n"
+    )
+    (copy / "listing.bin").write_bytes(b"\x00\xff\xfe")
+
+    exit_code, _, err = _run_check(capsys, str(copy / "todo.plain"))
+
+    assert exit_code == 1
+    assert err.startswith("Error: Referenced resource 'listing.bin' in module 'todo' is a binary file.")
+
+
+def test_check_test_dir_option_overrides_the_config_and_the_default(project_dir, tmp_path, capsys, monkeypatch):
+    copy = _copy_project(project_dir, tmp_path)
+    (copy / "tests").rename(copy / "scenarios")
+    (copy / "config.yaml").write_text("conformance-tests-script: run.sh\ntest-dir: does_not_exist\n")
+    monkeypatch.chdir(tmp_path)  # the option is relative to the working directory
+
+    assert "todo:add-task has no conformance scenario" in _run_check(capsys, "project/todo.plain")[2]
+    _assert_ok(_run_check(capsys, "project/todo.plain", "--test-dir", "project/scenarios"))
+
+
+def test_check_test_dir_option_can_be_repeated(project_dir, tmp_path, capsys):
+    copy = _copy_project(project_dir, tmp_path)
+    (copy / "more").mkdir()
+    (copy / "tests" / "todo" / "list-tasks.plain").rename(copy / "more" / "list-tasks.plain")
+
+    assert "todo:list-tasks has no conformance scenario" in _run_check(capsys, str(copy / "todo.plain"))[2]
+    _assert_ok(
+        _run_check(
+            capsys, str(copy / "todo.plain"), "--test-dir", str(copy / "tests"), "--test-dir", str(copy / "more")
+        )
+    )
+
+
 def test_check_reports_ancestor_resource_before_frid_walk_error(cli_specs_dir, capsys):
     # base.plain links a binary file; top.plain also has a code-variable conflict only the FRID walk finds.
     spec = os.path.join(cli_specs_dir, "resource_before_frid_walk", "top.plain")
@@ -382,9 +496,10 @@ def test_parse_valid_module_prints_success_json(cli_specs_dir, capsys):
 
     assert (exit_code, err) == (0, "")
     result = _parse_output(out)
-    assert set(result) == {"format_version", "modules", "resources"}
-    assert result["format_version"] == 1
+    assert set(result) == {"format_version", "modules", "resources", "test_plain_files"}
+    assert result["format_version"] == 2
     assert result["resources"] == {}
+    assert result["test_plain_files"] == {}
     _, tree = plain_file.parse_module_chain("valid.plain", [cli_specs_dir])[-1]
     assert result["modules"] == [{"module": "valid", "tree": json.loads(json.dumps(tree))}]
 
@@ -397,7 +512,7 @@ def test_parse_invalid_module_prints_error_json(cli_specs_dir, capsys):
     assert (exit_code, err) == (1, "")
     result = _parse_output(out)
     assert set(result) == {"format_version", "type", "message"}
-    assert result["format_version"] == 1
+    assert result["format_version"] == 2
     assert result["type"] == "PlainSyntaxError"
     _, _, check_err = _run_check(capsys, spec)
     assert check_err == f"Error: {result['message']}\n"
@@ -442,7 +557,7 @@ def _write_module(path, body="", requires=None):
     front = "---\nrequires:\n" + "".join(f"  - {name}\n" for name in requires) + "---\n\n" if requires else ""
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
-        front + "***implementation reqs***\n\n- A req.\n\n***functional specs***\n\n- A functionality." + body
+        front + "***implementation reqs***\n\n- A req.\n\n***functional specs***\n\n# main\nA functionality." + body
     )
 
 
@@ -479,6 +594,54 @@ def test_parse_lists_a_target_linked_from_two_modules_once(cli_specs_dir, capsys
     result = _parse_output(out)
     assert _module_names(result) == ["shared_link_helper", "shared_link_top"]
     assert result["resources"] == {"notes.md": "notes.md"}
+
+
+def test_parse_lists_the_test_plain_files_and_merges_their_scenarios(project_dir, capsys, monkeypatch):
+    monkeypatch.chdir(project_dir)
+
+    exit_code, out, err = _run_parse(capsys, "todo.plain")
+
+    assert (exit_code, err) == (0, "")
+    result = _parse_output(out)
+    assert result["test_plain_files"] == {
+        "tests/todo/add-task.plain": {"module": "todo", "func_id": "add-task"},
+        "tests/todo/list-tasks.plain": {"module": "todo", "func_id": "list-tasks"},
+    }
+    functionalities = {item["id"]: item for item in result["modules"][0]["tree"]["functional specs"]}
+    assert [scenario["id"] for scenario in functionalities["add-task"]["conformance_tests"]] == [
+        "add-first-task",
+        "add-without-name",
+    ]
+    assert [scenario["id"] for scenario in functionalities["add-task"]["acceptance_tests"]] == ["add-then-list"]
+    assert functionalities["list-tasks"]["conformance_tests"][0]["text"] == (
+        "With two :Task: items added, `todo list` prints two lines, lowest id first, and exits with status 0."
+    )
+
+
+def test_parse_resources_include_the_links_of_the_scenarios(project_dir, tmp_path, capsys):
+    copy = _copy_project(project_dir, tmp_path)
+    (copy / "tests" / "todo" / "list-tasks.plain").write_text(
+        "---\nmodule: todo\nfunc_id: list-tasks\n---\n\n***conformance tests***\n\n# lists\n"
+        "The output is [the listing](listing.txt).\n\n***acceptance tests***\n"
+    )
+    (copy / "listing.txt").write_text("1 Buy milk\n")
+
+    exit_code, out, _ = _run_parse(capsys, str(copy / "todo.plain"))
+
+    assert exit_code == 0
+    assert _parse_output(out)["resources"] == {"listing.txt": "listing.txt"}
+
+
+def test_parse_missing_conformance_scenario_is_a_parser_error(project_dir, tmp_path, capsys):
+    copy = _copy_project(project_dir, tmp_path)
+    (copy / "tests" / "todo" / "list-tasks.plain").unlink()
+
+    exit_code, out, _ = _run_parse(capsys, str(copy / "todo.plain"))
+
+    assert exit_code == 1
+    result = _parse_output(out)
+    assert result["type"] == "MissingConformanceScenariosError"
+    assert "add-test-scenarios" in result["message"]
 
 
 def test_parse_without_file_argument_is_usage_error(capsys):

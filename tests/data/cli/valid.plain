@@ -8,4 +8,5 @@
 
 ***functional specs***
 
-- :App: prints "hello, world".
+# app-prints-hello-world
+:App: prints "hello, world".

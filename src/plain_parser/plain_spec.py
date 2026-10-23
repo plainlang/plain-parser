@@ -1,7 +1,7 @@
 import hashlib
 import json
+import re
 import uuid
-from typing import Optional
 
 from liquid2.filter import with_context
 
@@ -11,18 +11,24 @@ DEFINITIONS = "definitions"
 NON_FUNCTIONAL_REQUIREMENTS = "implementation reqs"
 TEST_REQUIREMENTS = "test reqs"
 FUNCTIONAL_REQUIREMENTS = "functional specs"
+CONFORMANCE_TESTS = "conformance_tests"
 ACCEPTANCE_TESTS = "acceptance_tests"
+CONFORMANCE_TEST_HEADING = "conformance tests"
 ACCEPTANCE_TEST_HEADING = "acceptance tests"
 
-ALLOWED_SPECIFICATION_HEADINGS = [
-    DEFINITIONS,
-    NON_FUNCTIONAL_REQUIREMENTS,
-    TEST_REQUIREMENTS,
-    FUNCTIONAL_REQUIREMENTS,
-    ACCEPTANCE_TEST_HEADING,
-]
+# The sections whose content is a list of `- ` items.
+LIST_SECTION_HEADINGS = [DEFINITIONS, NON_FUNCTIONAL_REQUIREMENTS, TEST_REQUIREMENTS]
 
-ALLOWED_IMPORT_SPECIFICATION_HEADINGS = [DEFINITIONS, NON_FUNCTIONAL_REQUIREMENTS, TEST_REQUIREMENTS]
+ALLOWED_SPECIFICATION_HEADINGS = [*LIST_SECTION_HEADINGS, FUNCTIONAL_REQUIREMENTS]
+
+ALLOWED_IMPORT_SPECIFICATION_HEADINGS = LIST_SECTION_HEADINGS
+
+# A func-id or scenario-id: lowercase letters, digits and hyphens.
+SEMANTIC_ID_PATTERN = re.compile(r"[a-z0-9-]+")
+
+
+def is_semantic_id(text: str) -> bool:
+    return SEMANTIC_ID_PATTERN.fullmatch(text) is not None
 
 
 def has_acceptance_tests(plain_source_tree) -> bool:
@@ -69,102 +75,57 @@ def collect_specification_linked_resources(specification, specification_heading,
             )
 
 
-def collect_linked_resources_in_section(
-    section, linked_resources_list, specifications_list, include_acceptance_tests, frid=Optional[str]
-):
-    # When should we collect specification headings in the current section. Either when one of the following holds true:
-    # - frid wasn't specified
-    # - section has no ID (and that's exactly when it's the root section)
-    # - section has ID, frid was specified and the specified frid inside the current section tree
-    should_collect_specification_headings_in_current_section = (
-        frid is None or "ID" not in section or frid.startswith(section["ID"])
-    )
-    if should_collect_specification_headings_in_current_section:
-        specifications_to_collect = list(set([DEFINITIONS, NON_FUNCTIONAL_REQUIREMENTS, TEST_REQUIREMENTS]))
-        if specifications_list:
-            specifications_to_collect = list(set(specifications_to_collect) & set(specifications_list))
-        for specification_heading in specifications_to_collect:
-            if specification_heading in section:
-                for requirement in section[specification_heading]:
-                    collect_specification_linked_resources(requirement, specification_heading, linked_resources_list)
-
-    if FUNCTIONAL_REQUIREMENTS in section and (
-        not specifications_list or FUNCTIONAL_REQUIREMENTS in specifications_list
-    ):
-        functional_requirement_count = 0
-        for requirement in section[FUNCTIONAL_REQUIREMENTS]:
-            collect_specification_linked_resources(requirement, FUNCTIONAL_REQUIREMENTS, linked_resources_list)
-
-            functional_requirement_count += 1
-            section_id = section.get("ID", None)
-            current_frid = get_current_frid(section_id, functional_requirement_count)
-
-            if ACCEPTANCE_TESTS in requirement and include_acceptance_tests and (frid is None or frid == current_frid):
-                for acceptance_test in requirement[ACCEPTANCE_TESTS]:
-                    collect_specification_linked_resources(
-                        acceptance_test, FUNCTIONAL_REQUIREMENTS, linked_resources_list
-                    )
-
-            if frid is not None and current_frid == frid:
-                # here, we rely on the fact that FRIDs are incrementing. And if we have reached the current FRID, we should
-                # not collect any FRIDs after the current one.
-                return True
-
-    if "sections" in section:
-        for subsection in section["sections"]:
-            if collect_linked_resources_in_section(
-                subsection, linked_resources_list, specifications_list, include_acceptance_tests, frid
-            ):
-                return True
-
-    return False
-
-
-# TODO: check if this function can be refactored to return the list of linked resources instead of modifying it in place
 def collect_linked_resources(
-    plain_source_tree, linked_resources_list, specifications_list, include_acceptance_tests, frid=None
+    plain_source_tree, linked_resources_list, specifications_list, include_test_scenarios, frid=None
 ):
+    """Add the linked resources of the tree to ``linked_resources_list`` and sort the list by link text.
 
+    ``specifications_list`` limits the sections read; None reads every section. The functional specs are read up to
+    and including ``frid``, or all of them when ``frid`` is None. With ``include_test_scenarios`` the links of the
+    conformance and acceptance scenarios are added too, for ``frid`` alone when one is given. Returns True when
+    ``frid`` was reached.
+    """
     if not isinstance(plain_source_tree, dict):
         raise ValueError("plain_source_tree must be a dictionary.")
 
-    if frid is not None:
-        functional_requirements = get_frids(plain_source_tree)
-        if frid not in functional_requirements:
-            raise ValueError(f"frid {frid} does not exist.")
+    if frid is not None and frid not in get_frids(plain_source_tree):
+        raise ValueError(f"frid {frid} does not exist.")
 
-    result = collect_linked_resources_in_section(
-        plain_source_tree, linked_resources_list, specifications_list, include_acceptance_tests, frid
-    )
+    sections_to_collect = [
+        heading
+        for heading in ALLOWED_SPECIFICATION_HEADINGS
+        if heading in plain_source_tree and (not specifications_list or heading in specifications_list)
+    ]
+    frid_reached = False
+    for specification_heading in sections_to_collect:
+        for specification in plain_source_tree[specification_heading]:
+            collect_specification_linked_resources(specification, specification_heading, linked_resources_list)
 
-    # Sort linked_resources_list by the "text" field
+            if specification_heading != FUNCTIONAL_REQUIREMENTS:
+                continue
+
+            if include_test_scenarios and (frid is None or frid == specification["id"]):
+                scenarios = [*specification.get(CONFORMANCE_TESTS, []), *specification.get(ACCEPTANCE_TESTS, [])]
+                for scenario in scenarios:
+                    collect_specification_linked_resources(scenario, FUNCTIONAL_REQUIREMENTS, linked_resources_list)
+
+            if specification["id"] == frid:
+                frid_reached = True
+                break
+
     linked_resources_list.sort(key=lambda x: x["text"])
 
-    return result
+    return frid_reached
 
 
 def get_frids(plain_source_tree):
-    if FUNCTIONAL_REQUIREMENTS in plain_source_tree:
-        for functional_requirement_id in range(1, len(plain_source_tree[FUNCTIONAL_REQUIREMENTS]) + 1):
-            if "ID" in plain_source_tree:
-                yield plain_source_tree["ID"] + "." + str(functional_requirement_id)
-            else:
-                yield str(functional_requirement_id)
-
-    if "sections" in plain_source_tree:
-        for section in plain_source_tree["sections"]:
-            yield from get_frids(section)
+    """The func-ids of the tree's functionalities, in file order."""
+    for functionality in plain_source_tree.get(FUNCTIONAL_REQUIREMENTS) or []:
+        yield functionality["id"]
 
 
 def get_first_frid(plain_source_tree):
     return next(get_frids(plain_source_tree), None)
-
-
-def get_current_frid(section_id: Optional[str], functional_requirement_count: int) -> str:
-    if section_id is None:
-        return str(functional_requirement_count)
-    else:
-        return section_id + "." + str(functional_requirement_count)
 
 
 def get_next_frid(plain_source_tree, frid):
@@ -188,16 +149,7 @@ def get_previous_frid(plain_source_tree, frid):
 
 
 def get_frids_before(plain_source_tree, target_frid: str) -> list[str]:
-    """
-    Get all FRIDs that appear before the target FRID in the specification.
-
-    Args:
-        plain_source_tree: The plain source tree
-        target_frid: The FRID to find predecessors for
-
-    Returns:
-        List of FRIDs that appear before target_frid, in order
-    """
+    """The func-ids that come before ``target_frid`` in the specification, in order."""
     previous_frids = []
     for frid in get_frids(plain_source_tree):
         if frid == target_frid:
@@ -207,8 +159,10 @@ def get_frids_before(plain_source_tree, target_frid: str) -> list[str]:
     return previous_frids
 
 
-def get_specification_item_markdown(specification_item, code_variables, replace_code_variables):
-    markdown = specification_item["markdown"]
+def get_specification_item_markdown(specification_item, code_variables, replace_code_variables, key="markdown"):
+    """The text under ``key`` of the item, with its code variables recorded in ``code_variables`` and, when
+    ``replace_code_variables`` is set, their values put in place of the `{{ name }}` placeholders."""
+    markdown = specification_item[key]
     if "code_variables" in specification_item:
         for code_variable in specification_item["code_variables"]:
             if code_variable["name"] in code_variables:
@@ -225,120 +179,37 @@ def get_specification_item_markdown(specification_item, code_variables, replace_
     return markdown
 
 
-def get_specifications_from_plain_source_tree(
-    frid,
-    plain_source_tree,
-    definitions,
-    non_functional_requirements,
-    test_requirements,
-    functional_requirements,
-    acceptance_tests,
-    code_variables,
-    replace_code_variables,
-    section_id=None,
-):
-    return_frid = None
-    if FUNCTIONAL_REQUIREMENTS in plain_source_tree and len(plain_source_tree[FUNCTIONAL_REQUIREMENTS]) > 0:
-        functional_requirement_count = 0
-        for functional_requirement in plain_source_tree[FUNCTIONAL_REQUIREMENTS]:
-            functional_requirement_count += 1
-            if section_id is None:
-                current_frid = str(functional_requirement_count)
-            else:
-                current_frid = section_id + "." + str(functional_requirement_count)
-
-            functional_requirements.append(
-                get_specification_item_markdown(functional_requirement, code_variables, replace_code_variables)
-            )
-
-            if current_frid == frid:
-                if ACCEPTANCE_TESTS in functional_requirement:
-                    for acceptance_test in functional_requirement[ACCEPTANCE_TESTS]:
-                        acceptance_tests.append(
-                            get_specification_item_markdown(acceptance_test, code_variables, replace_code_variables)
-                        )
-
-                return_frid = current_frid
-                break
-
-    if "sections" in plain_source_tree:
-        for section in plain_source_tree["sections"]:
-            sub_frid = get_specifications_from_plain_source_tree(
-                frid,
-                section,
-                definitions,
-                non_functional_requirements,
-                test_requirements,
-                functional_requirements,
-                acceptance_tests,
-                code_variables,
-                replace_code_variables,
-                section["ID"],
-            )
-            if sub_frid is not None:
-                return_frid = sub_frid
-                break
-
-    if return_frid is not None:
-        if DEFINITIONS in plain_source_tree and plain_source_tree[DEFINITIONS] is not None:
-            definitions[0:0] = [
-                get_specification_item_markdown(specification, code_variables, replace_code_variables)
-                for specification in plain_source_tree[DEFINITIONS]
-            ]
-        if (
-            NON_FUNCTIONAL_REQUIREMENTS in plain_source_tree
-            and plain_source_tree[NON_FUNCTIONAL_REQUIREMENTS] is not None
-        ):
-            non_functional_requirements[0:0] = [
-                get_specification_item_markdown(specification, code_variables, replace_code_variables)
-                for specification in plain_source_tree[NON_FUNCTIONAL_REQUIREMENTS]
-            ]
-        if TEST_REQUIREMENTS in plain_source_tree and plain_source_tree[TEST_REQUIREMENTS] is not None:
-            test_requirements[0:0] = [
-                get_specification_item_markdown(specification, code_variables, replace_code_variables)
-                for specification in plain_source_tree[TEST_REQUIREMENTS]
-            ]
-
-    return return_frid
-
-
 def get_specifications_for_frid(plain_source_tree, frid, replace_code_variables=True):
-    definitions = []
-    non_functional_requirements = []
-    test_requirements = []
-    functional_requirements = []
-    acceptance_tests = []
+    """The specifications that build ``frid``: every list section, the functional specs up to and including
+    ``frid``, and the conformance and acceptance scenarios of ``frid`` as `{"id", "text"}` entries.
+
+    Returns the specifications and the code variables they use (None when there are none). Raise when ``frid``
+    is not in the tree.
+    """
+    functionalities = plain_source_tree.get(FUNCTIONAL_REQUIREMENTS) or []
+    position = next((index for index, item in enumerate(functionalities) if item["id"] == frid), None)
+    if position is None:
+        raise Exception(f"Functionality {frid} does not exist.")
 
     code_variables = {}
 
-    result = get_specifications_from_plain_source_tree(
-        frid,
-        plain_source_tree,
-        definitions,
-        non_functional_requirements,
-        test_requirements,
-        functional_requirements,
-        acceptance_tests,
-        code_variables,
-        replace_code_variables,
-    )
-    if result is None:
-        raise Exception(f"Functionality {frid} does not exist.")
+    def texts(items, key="markdown"):
+        return [get_specification_item_markdown(item, code_variables, replace_code_variables, key) for item in items]
 
+    def scenarios(items):
+        return [{"id": item["id"], "text": text} for item, text in zip(items, texts(items, "text"))]
+
+    functionality = functionalities[position]
     specifications = {
-        DEFINITIONS: definitions,
-        NON_FUNCTIONAL_REQUIREMENTS: non_functional_requirements,
-        TEST_REQUIREMENTS: test_requirements,
-        FUNCTIONAL_REQUIREMENTS: functional_requirements,
+        DEFINITIONS: texts(plain_source_tree.get(DEFINITIONS) or []),
+        NON_FUNCTIONAL_REQUIREMENTS: texts(plain_source_tree.get(NON_FUNCTIONAL_REQUIREMENTS) or []),
+        TEST_REQUIREMENTS: texts(plain_source_tree.get(TEST_REQUIREMENTS) or []),
+        FUNCTIONAL_REQUIREMENTS: texts(functionalities[: position + 1]),
+        CONFORMANCE_TESTS: scenarios(functionality.get(CONFORMANCE_TESTS, [])),
+        ACCEPTANCE_TESTS: scenarios(functionality.get(ACCEPTANCE_TESTS, [])),
     }
 
-    if acceptance_tests:
-        specifications[ACCEPTANCE_TESTS] = acceptance_tests
-
-    if code_variables:
-        return specifications, code_variables
-    else:
-        return specifications, None
+    return specifications, (code_variables or None)
 
 
 @with_context
@@ -390,16 +261,13 @@ def get_hash_value(specifications):
 
 
 def get_frids_range(plain_source, start, end=None):
-    """Return the FRIDs from ``start`` through ``end`` inclusive, or through the last FRID when ``end`` is None."""
+    """The func-ids from ``start`` through ``end`` inclusive, or through the last one when ``end`` is None."""
     frids = list(get_frids(plain_source))
-
-    start = str(start)
 
     if start not in frids:
         raise InvalidFridArgument(f"Invalid start functionality ID: {start}. Valid IDs are: {frids}.")
 
     if end is not None:
-        end = str(end)
         if end not in frids:
             raise InvalidFridArgument(f"Invalid end functionality ID: {end}. Valid IDs are: {frids}.")
 

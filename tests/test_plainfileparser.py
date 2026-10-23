@@ -21,7 +21,15 @@ def test_regular_plain_source(get_test_data_path):
             {"markdown": "- First implementation requirement."},
             {"markdown": "- Second implementation requirement."},
         ],
-        "functional specs": [{"markdown": '- Display "hello, world"'}],
+        "functional specs": [
+            {
+                "id": "display-hello-world",
+                "markdown": 'Display "hello, world"',
+                "linked_resources": [],
+                "conformance_tests": [],
+                "acceptance_tests": [],
+            }
+        ],
     }
 
 
@@ -34,7 +42,7 @@ def test_unknown_section():
     with pytest.raises(
         Exception,
         match=re.escape(
-            "Syntax error at line 4: Invalid specification heading (`Unknown Section:`). Allowed headings: definitions, implementation reqs, test reqs, functional specs, acceptance tests"
+            "Syntax error at line 4: Invalid specification heading (`Unknown Section:`). Allowed headings: definitions, implementation reqs, test reqs, functional specs"
         ),
     ):
         plain_file.parse_plain_source(plain_source, {}, [], [], [])
@@ -112,7 +120,15 @@ def test_plain_file_parser_with_comments(get_test_data_path):
     assert plain_sections == {
         "definitions": [],
         "implementation reqs": [{"markdown": "- Second implementation requirement."}],
-        "functional specs": [{"markdown": '- Display "hello, world"'}],
+        "functional specs": [
+            {
+                "id": "display-hello-world",
+                "markdown": 'Display "hello, world"',
+                "linked_resources": [],
+                "conformance_tests": [],
+                "acceptance_tests": [],
+            }
+        ],
     }
 
 
@@ -127,7 +143,15 @@ def test_plain_file_parser_with_comments_indented(get_test_data_path):
             {"markdown": "- First implementation requirement."},
             {"markdown": "- Second implementation requirement."},
         ],
-        "functional specs": [{"markdown": '- Display "hello, world"'}],
+        "functional specs": [
+            {
+                "id": "display-hello-world",
+                "markdown": 'Display "hello, world"',
+                "linked_resources": [],
+                "conformance_tests": [],
+                "acceptance_tests": [],
+            }
+        ],
     }
 
 
@@ -231,7 +255,10 @@ def test_reference_link_parsing_independent_of_working_directory(get_test_data_p
 def test_invalid_specification_order(get_test_data_path):
     with pytest.raises(
         Exception,
-        match="Syntax error at line 6: Definitions specification must be the first specification in the section.",
+        match=re.escape(
+            "Syntax error at line 6 in module 'invalid_specification_order': Definitions specification must be the "
+            "first specification in the section (`definitions`)"
+        ),
     ):
         plain_file.plain_file_parser("invalid_specification_order.plain", [get_test_data_path("data/plainfile")])
 
@@ -239,7 +266,10 @@ def test_invalid_specification_order(get_test_data_path):
 def test_duplicate_specification_heading(get_test_data_path):
     with pytest.raises(
         Exception,
-        match=re.escape("Syntax error at line 6: Duplicate specification heading (`definitions`)"),
+        match=re.escape(
+            "Syntax error at line 6 in module 'duplicate_specification_heading': Duplicate specification heading "
+            "(`definitions`)"
+        ),
     ):
         plain_file.plain_file_parser(
             "duplicate_specification_heading.plain",
@@ -299,7 +329,10 @@ def test_no_functional_specs_section(get_test_data_path):
 def test_empty_functional_specs_section(get_test_data_path):
     with pytest.raises(
         PlainSyntaxError,
-        match=re.escape("has an empty 'functional specs' section"),
+        match=re.escape(
+            "has a 'functional specs' section without a `# <func-id>` heading. A functionality is a `# <func-id>` "
+            "heading followed by its body; the previous syntax is not supported."
+        ),
     ):
         plain_file.plain_file_parser(
             "empty_functional_specs_section.plain",
@@ -405,9 +438,10 @@ def test_code_variables(load_test_data, get_test_data_path):
 - Second implementation requirement.
 
 ***functional specs***
-- Implement something nice and useful
-    - the nice thing should be really {keys[0]}
-    - the useful thing should be really useful
+# implement
+Implement something nice and useful
+  - the nice thing should be really {keys[0]}
+  - the useful thing should be really useful
 """
 
     assert rendered_plain_source == expected_rendered_plain_source
@@ -421,7 +455,11 @@ def test_code_variables(load_test_data, get_test_data_path):
         ],
         "functional specs": [
             {
-                "markdown": "- Implement something nice and useful\n    - the nice thing should be really {{ variable_name }}\n    - the useful thing should be really useful",
+                "id": "implement",
+                "markdown": "Implement something nice and useful\n  - the nice thing should be really {{ variable_name }}\n  - the useful thing should be really useful",
+                "linked_resources": [],
+                "conformance_tests": [],
+                "acceptance_tests": [],
                 "code_variables": [{"name": "variable_name", "value": "nice"}],
             }
         ],
@@ -447,9 +485,10 @@ def test_code_variables(load_test_data, get_test_data_path):
 - Second implementation requirement {keys[1]}.
 
 ***functional specs***
-- Implement something nice and useful
-    - the nice thing should be really {keys[2]}
-    - the useful thing should be really useful
+# implement
+Implement something nice and useful
+  - the nice thing should be really {keys[2]}
+  - the useful thing should be really useful
 """
 
     assert rendered_plain_source == expected_rendered_plain_source
@@ -469,7 +508,11 @@ def test_code_variables(load_test_data, get_test_data_path):
         ],
         "functional specs": [
             {
-                "markdown": "- Implement something nice and useful\n    - the nice thing should be really {{ variable_name_1 }}\n    - the useful thing should be really useful",
+                "id": "implement",
+                "markdown": "Implement something nice and useful\n  - the nice thing should be really {{ variable_name_1 }}\n  - the useful thing should be really useful",
+                "linked_resources": [],
+                "conformance_tests": [],
+                "acceptance_tests": [],
                 "code_variables": [{"name": "variable_name_1", "value": "nice"}],
             }
         ],
@@ -478,9 +521,9 @@ def test_code_variables(load_test_data, get_test_data_path):
     assert plain_source == expected_plain_source
 
 
-def test_acceptance_tests_block_include_with_trailing_newline_keeps_structure_and_ignores_quote(get_test_data_path):
+def test_block_include_with_trailing_newline_keeps_structure_and_ignores_quote(get_test_data_path):
     """
-    Ensures that a block-level include inside ***acceptance tests*** whose template ends
+    Ensures that a block-level include inside a functionality body whose template ends
     with a trailing newline does not terminate the list, and that a following '> ...' line
     is treated as a comment and ignored. The parser should not raise a syntax error.
     It's an error we encountered while implementing custom rendering and should break in case of regression.
@@ -488,112 +531,202 @@ def test_acceptance_tests_block_include_with_trailing_newline_keeps_structure_an
     plain_file.plain_file_parser("block_level_include.plain", [get_test_data_path("data/templates")])
 
 
-def test_acceptance_tests_top_level_rejected():
-    plain_source = """
-***acceptance tests***
+_SPEC_HEAD = "***definitions***\n\n- :Task: is a thing to do.\n\n***implementation reqs***\n\n- A req.\n\n"
 
-- Test something.
-"""
+
+def _parse(plain_source):
+    return plain_file.marshall_plain_source(plain_file.parse_plain_source(plain_source, {}, [], [], []).plain_source)
+
+
+def test_functionality_is_its_heading_id_and_its_body():
+    plain_source = _SPEC_HEAD + (
+        "***functional specs***\n\n"
+        "# add-task\n"
+        "A :Task: can be added.\n"
+        "It gets an id.\n"
+        "  - Only a :Task: with a name is added.\n"
+        "    - The name is trimmed.\n"
+        "\n"
+        "# list-tasks\n"
+        "> A comment between the heading and the body.\n"
+        "\n"
+        "Every :Task: is listed.\n"
+    )
+
+    assert _parse(plain_source)["functional specs"] == [
+        {
+            "id": "add-task",
+            "markdown": "A :Task: can be added.\nIt gets an id.\n  - Only a :Task: with a name is added.\n    - The name is trimmed.",
+            "linked_resources": [],
+            "conformance_tests": [],
+            "acceptance_tests": [],
+        },
+        {
+            "id": "list-tasks",
+            "markdown": "Every :Task: is listed.",
+            "linked_resources": [],
+            "conformance_tests": [],
+            "acceptance_tests": [],
+        },
+    ]
+
+
+def test_functionality_body_may_start_with_a_list():
+    plain_source = _SPEC_HEAD + "***functional specs***\n\n# add-task\n  - A :Task: can be added.\n"
+
+    assert _parse(plain_source)["functional specs"][0]["markdown"] == "  - A :Task: can be added."
+
+
+def test_bullets_without_a_heading_are_the_previous_syntax(get_test_data_path):
+    with pytest.raises(PlainSyntaxError) as exc_info:
+        plain_file.plain_file_parser("old_syntax_functional_specs.plain", [get_test_data_path("data/plainfileparser")])
+
+    assert str(exc_info.value) == (
+        "Plain syntax error: Syntax error at line 11 in module 'old_syntax_functional_specs': Content before the "
+        'first `# <func-id>` heading in the functional specs section (`Display "hello, world"`). A functionality is '
+        "a `# <func-id>` heading followed by its body; the previous syntax is not supported."
+    )
+
+
+def test_flush_left_list_after_a_heading_is_body():
+    plain_source = (
+        _SPEC_HEAD + "***functional specs***\n\n# add-task\nA :Task: can be added.\n\n- A :Task: has a name.\n"
+        "    - Deeper, four spaces in.\n"
+    )
+
+    assert _parse(plain_source)["functional specs"][0]["markdown"] == (
+        "A :Task: can be added.\n\n- A :Task: has a name.\n    - Deeper, four spaces in."
+    )
+
+
+@pytest.mark.parametrize("heading", ["acceptance tests", "conformance tests"])
+def test_test_section_in_spec_plain_file_is_rejected(heading):
+    plain_source = f"***definitions***\n\n- :Task: is a thing to do.\n\n***{heading}***\n\n# add\nAdding works.\n"
+
+    with pytest.raises(PlainSyntaxError) as exc_info:
+        plain_file.parse_plain_source(plain_source, {}, [], [], [])
+
+    assert str(exc_info.value) == (
+        f"Plain syntax error: Syntax error at line 5: The `{heading}` section is not allowed in a spec plain file; "
+        "test scenarios live in test plain files."
+    )
+
+
+def test_nested_acceptance_tests_section_is_rejected():
+    plain_source = _SPEC_HEAD + (
+        "***functional specs***\n\n# add-task\nA :Task: can be added.\n\n"
+        "    ***acceptance tests***\n\n    - Adding a :Task: shows it.\n"
+    )
+
+    with pytest.raises(PlainSyntaxError, match=re.escape("Syntax error at line 14: The `acceptance tests` section")):
+        plain_file.parse_plain_source(plain_source, {}, [], [], [])
+
+
+def test_heading_outside_functional_specs_is_rejected():
+    plain_source = "***implementation reqs***\n\n# add-task\n- A req.\n"
+
     with pytest.raises(
         PlainSyntaxError,
         match=re.escape(
-            "Syntax error at line 2: acceptance tests heading should be nested under specific functional spec."
+            "Syntax error at line 3: A `# <func-id>` heading is allowed only in the functional specs section (`add-task`)."
         ),
     ):
         plain_file.parse_plain_source(plain_source, {}, [], [], [])
 
 
-def test_acceptance_tests_top_level_after_other_headings_rejected():
-    plain_source = """***definitions***
+def test_heading_of_another_level_is_rejected():
+    plain_source = _SPEC_HEAD + "***functional specs***\n\n## add-task\nA :Task: can be added.\n"
 
-- :concept: is a concept.
-
-***acceptance tests***
-
-- Test something.
-"""
     with pytest.raises(
         PlainSyntaxError,
         match=re.escape(
-            "Syntax error at line 5: acceptance tests heading should be nested under specific functional spec."
+            "Syntax error at line 11: Invalid heading level 2 (`add-task`). A functionality heading is `# <func-id>`."
         ),
     ):
         plain_file.parse_plain_source(plain_source, {}, [], [], [])
 
 
-def test_acceptance_tests_nested_under_definitions_rejected():
-    plain_source = """***definitions***
+def test_func_id_with_other_characters_is_rejected(get_test_data_path):
+    with pytest.raises(PlainSyntaxError) as exc_info:
+        plain_file.plain_file_parser("func_id_invalid.plain", [get_test_data_path("data/plainfileparser")])
 
-- :concept: is a concept.
+    assert str(exc_info.value) == (
+        "Plain syntax error: Syntax error at line 10 in module 'func_id_invalid': Invalid func-id (`Add Task 2`). "
+        "A func-id has only lowercase letters, digits and hyphens."
+    )
 
-    ***acceptance tests***
 
-    - Test the :concept:.
+@pytest.mark.parametrize("heading", ["#", "# ", "# add_task", "# add-task!", "# Ädd"])
+def test_func_id_syntax_is_checked(heading):
+    plain_source = _SPEC_HEAD + f"***functional specs***\n\n{heading}\nA :Task: can be added.\n"
 
-***functional specs***
+    with pytest.raises(PlainSyntaxError, match="Syntax error at line 11: Invalid func-id"):
+        plain_file.parse_plain_source(plain_source, {}, [], [], [])
 
-- Display "hello, world"
-"""
+
+def test_duplicate_func_id_is_rejected(get_test_data_path):
+    with pytest.raises(PlainSyntaxError) as exc_info:
+        plain_file.plain_file_parser("func_id_duplicate.plain", [get_test_data_path("data/plainfileparser")])
+
+    assert str(exc_info.value) == (
+        "Plain syntax error: Syntax error at line 13 in module 'func_id_duplicate': Duplicate func-id `add-task`; "
+        "it is first used at line 7."
+    )
+
+
+@pytest.mark.parametrize("content", ["A :Task: can be added.", "  - A :Task: can be added."])
+def test_content_before_the_first_heading_is_rejected(content):
+    plain_source = _SPEC_HEAD + f"***functional specs***\n\n{content}\n\n# add-task\nA :Task: can be added.\n"
+
     with pytest.raises(
         PlainSyntaxError,
         match=re.escape(
-            "Syntax error at line 5: acceptance tests heading should be nested under specific functional spec."
+            "Syntax error at line 11: Content before the first `# <func-id>` heading in the functional specs section "
+            "(`A :Task: can be added.`). A functionality is a `# <func-id>` heading followed by its body; the "
+            "previous syntax is not supported."
         ),
     ):
         plain_file.parse_plain_source(plain_source, {}, [], [], [])
 
 
-def test_acceptance_tests_nested_under_implementation_reqs_rejected():
-    plain_source = """***implementation reqs***
+@pytest.mark.parametrize(
+    "tail",
+    ["\n# list-tasks\nEvery :Task: is listed.\n", "\n***test reqs***\n\n- A test req.\n", "", "\n> Only a comment.\n"],
+)
+def test_functionality_without_body_is_rejected(tail):
+    plain_source = _SPEC_HEAD + "***functional specs***\n\n# add-task\n" + tail
 
-- First implementation requirement.
-
-    ***acceptance tests***
-
-    - Test something.
-"""
     with pytest.raises(
-        PlainSyntaxError,
-        match=re.escape(
-            "Syntax error at line 5: acceptance tests heading should be nested under specific functional spec."
-        ),
+        PlainSyntaxError, match=re.escape("Syntax error at line 11: Functionality `add-task` has no body.")
     ):
         plain_file.parse_plain_source(plain_source, {}, [], [], [])
 
 
-def test_acceptance_tests_nested_under_test_reqs_rejected():
-    plain_source = """***test reqs***
+def test_any_block_after_a_heading_is_body():
+    plain_source = _SPEC_HEAD + (
+        "***functional specs***\n\n# add-task\nA :Task: can be added.\n\n```\ntodo add\n```\n\n"
+        "| id | name |\n|---|---|\n| 1 | Buy milk |\n\n# list-tasks\nEvery :Task: is listed.\n"
+    )
 
-- First test requirement.
+    functionalities = _parse(plain_source)["functional specs"]
 
-    ***acceptance tests***
+    # The table is re-rendered with padded cells; the blank lines between the blocks are kept.
+    assert functionalities[0]["markdown"] == (
+        "A :Task: can be added.\n\n```\ntodo add\n```\n\n| id  | name     |\n| --- | -------- |\n| 1   | Buy milk |"
+    )
+    assert functionalities[1]["markdown"] == "Every :Task: is listed."
 
-    - Test something.
-"""
-    with pytest.raises(
-        PlainSyntaxError,
-        match=re.escape(
-            "Syntax error at line 5: acceptance tests heading should be nested under specific functional spec."
-        ),
-    ):
+
+def test_block_in_a_list_section_is_still_rejected():
+    plain_source = "***implementation reqs***\n\n- A req.\n\n```\ncode\n```\n"
+
+    with pytest.raises(PlainSyntaxError, match=re.escape("Syntax error at line 5: Invalid source structure")):
         plain_file.parse_plain_source(plain_source, {}, [], [], [])
 
 
-def test_acceptance_tests_nested_under_functional_spec_allowed():
-    plain_source = """***definitions***
-
-- :concept: is a concept.
-
-***functional specs***
-
-- Display "hello, world"
-
-    ***acceptance tests***
-
-    - Test the :concept:.
-"""
-    result = plain_file.parse_plain_source(plain_source, {}, [], [], [])
-    assert plain_spec.FUNCTIONAL_REQUIREMENTS in result.plain_source
+def test_invalid_plain_file_extension():
+    with pytest.raises(PlainSyntaxError):
+        plain_file.plain_file_parser("test.txt", [])
 
 
 def test_concept_validation_definitions(get_test_data_path):
@@ -654,19 +787,6 @@ def test_concept_validation_several_concepts(get_test_data_path):
         "concept_validation_several_concepts.plain",
         [get_test_data_path("data/plainfileparser")],
     )
-
-
-def test_concept_validation_acceptance_tests(get_test_data_path):
-    plain_file.plain_file_parser(
-        "concept_validation_acceptance_tests.plain",
-        [get_test_data_path("data/plainfileparser")],
-    )
-
-    with pytest.raises(PlainSyntaxError):
-        plain_file.plain_file_parser(
-            "concept_validation_acceptance_tests_nondefined.plain",
-            [get_test_data_path("data/plainfileparser")],
-        )
 
 
 def test_concept_validation_cyclic_definitions(get_test_data_path):
@@ -816,6 +936,6 @@ def test_topological_sort(get_test_data_path):
 def test_liquid_syntax_error_names_module(get_test_data_path):
     with pytest.raises(
         PlainSyntaxError,
-        match=re.escape("Plain syntax error: Invalid Liquid at unterminated_output:4:0: "),
+        match=re.escape("Plain syntax error: Invalid Liquid at unterminated_output:5:0: "),
     ):
         plain_file.plain_file_parser("unterminated_output.plain", [get_test_data_path("data/templates")])

@@ -1,6 +1,6 @@
 import io
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable, Sequence, cast
 from urllib.parse import urlparse
@@ -9,8 +9,8 @@ import frontmatter
 import mistletoe
 import mistletoe.block_token
 from liquid2 import DictLoader, Environment
-from mistletoe.block_token import List, Paragraph, Quote
-from mistletoe.markdown_renderer import Fragment, MarkdownRenderer
+from mistletoe.block_token import Heading, List, Paragraph, Quote
+from mistletoe.markdown_renderer import BlankLine, Fragment, MarkdownRenderer
 from mistletoe.span_token import Emphasis, Link, RawText, SpanToken, Strong
 from mistletoe.token import Token
 from mistletoe.utils import traverse
@@ -30,6 +30,9 @@ RESOURCE_MARKER = "[resource]"
 
 IMPORT_DIRECTIVE = "import"
 REQUIRES_DIRECTIVE = "requires"
+PREVIOUS_SYNTAX_HINT = (
+    "A functionality is a `# <func-id>` heading followed by its body; the previous syntax is not supported."
+)
 REQUIRED_CONCEPTS_DIRECTIVE = "required_concepts"
 EXPORTED_CONCEPTS_DIRECTIVE = "exported_concepts"
 
@@ -40,6 +43,17 @@ PLAIN_SOURCE_TEMPLATE = {
     plain_spec.NON_FUNCTIONAL_REQUIREMENTS: None,
     plain_spec.TEST_REQUIREMENTS: None,
 }
+
+
+@dataclass
+class Functionality:
+    """A functionality of ***functional specs***: its func-id and the block tokens of its body."""
+
+    id: str
+    line_number: int
+    # The statement paragraph and the lists under it, in source order.
+    body: list = field(default_factory=list)
+    linked_resources: list[dict] = field(default_factory=list)
 
 
 @dataclass
@@ -88,68 +102,79 @@ def remove_quotes(token):
     token.children = tuple(new_children)
 
 
-def check_section_for_linked_resources(section, template_dirs):
+def find_linked_resources(tokens, template_dirs, where: str = "") -> list[dict]:
+    """The links in the tokens, each checked to be a relative path to an existing file that is not a .plain file.
+
+    ``where`` names the place of the links in error messages, e.g. " in test plain file 'tests/m/f.plain'".
+    """
     linked_resources = []
-    for link in traverse(section, klass=Link):
+    for link in (link for token in tokens for link in traverse(token, klass=Link)):
         parsed_url = urlparse(link.node.target)
         if parsed_url.scheme != "" or os.path.isabs(link.node.target):
             raise PlainSyntaxError(
-                f"Plain syntax error: Only relative links are allowed (text: {link.node.children[0].content}, target: {link.node.target})."
+                f"Plain syntax error: Only relative links are allowed{where} (text: {link.node.children[0].content}, target: {link.node.target})."
             )
 
         resolved_target = loaders.resolve_linked_resource(template_dirs, link.node.target)
         if resolved_target is None:
             searched_dirs = "\n".join(f"  {position}. {dir}" for position, dir in enumerate(template_dirs, start=1))
             raise PlainSyntaxError(
-                f"Plain syntax error: Link {link.node.target} does not exist. "
+                f"Plain syntax error: Link {link.node.target}{where} does not exist. "
                 f"Linked resources are looked up relative to the following directories "
                 f"(highest to lowest precedence):\n{searched_dirs}"
             )
 
         if not os.path.isfile(resolved_target):
             raise PlainSyntaxError(
-                f"Plain syntax error: Link {link.node.target} must be a file (resolved to {resolved_target})."
+                f"Plain syntax error: Link {link.node.target}{where} must be a file (resolved to {resolved_target})."
             )
 
         if len(link.node.children) != 1:
-            raise PlainSyntaxError(f"Plain syntax error: Link must have text specified (link: {link.node.target}).")
+            raise PlainSyntaxError(
+                f"Plain syntax error: Link{where} must have text specified (link: {link.node.target})."
+            )
 
         linked_resource_file_extension = os.path.splitext(os.path.basename(link.node.target))[1]
         if linked_resource_file_extension == ".plain":
             raise PlainSyntaxError(
-                f"Referenced resource '{link.node.target}' is a .plain file. "
+                f"Referenced resource '{link.node.target}'{where} is a .plain file. "
                 f"Referencing .plain files through Linked Resources is not supported. "
                 "Please use the import section to include definitions or implementation/test requirements from another module."
             )
 
         linked_resources.append({"text": link.node.children[0].content, "target": link.node.target})
 
+    return linked_resources
+
+
+def check_section_for_linked_resources(section, template_dirs):
+    linked_resources = find_linked_resources([section], template_dirs)
     if linked_resources:
         section.linked_resources = linked_resources
 
 
 def check_for_linked_resources(plain_source, template_dirs):
-    for specification_heading in plain_spec.ALLOWED_SPECIFICATION_HEADINGS:
+    for specification_heading in plain_spec.LIST_SECTION_HEADINGS:
         if specification_heading in plain_source and hasattr(plain_source[specification_heading], "children"):
             for requirement in plain_source[specification_heading].children:
                 check_section_for_linked_resources(requirement, template_dirs)
 
-                if hasattr(requirement, plain_spec.ACCEPTANCE_TESTS):
-                    for acceptance_test in requirement.acceptance_tests:
-                        check_section_for_linked_resources(acceptance_test, template_dirs)
+    for functionality in plain_source.get(plain_spec.FUNCTIONAL_REQUIREMENTS) or []:
+        functionality.linked_resources = find_linked_resources(functionality.body, template_dirs)
 
 
-def process_section_code_variables(section, code_variables):
-    if "markdown" not in section:
+def process_section_code_variables(section, code_variables, text_key="markdown"):
+    """Put `{{ name }}` placeholders back into the section text and record the code variables it uses."""
+    if text_key not in section:
         return
 
     code_variables_array = []
     for key, value in code_variables.items():
-        if key not in section["markdown"]:
+        if key not in section[text_key]:
             continue
 
         variable_name = next(iter(value))
-        section["markdown"] = section["markdown"].replace(key, f"{{{{ {variable_name} }}}}")
+        section[text_key] = section[text_key].replace(key, f"{{{{ {variable_name} }}}}")
 
         code_variables_array.append({"name": variable_name, "value": value[variable_name]})
 
@@ -171,8 +196,8 @@ def has_functional_specs_section(plain_source) -> bool:
 
 def count_functionalities(plain_source) -> int:
     """Number of functionalities under the ***functional specs*** section (0 if absent or empty)."""
-    section = plain_source.get(plain_spec.FUNCTIONAL_REQUIREMENTS)
-    return len(section.children) if section is not None else 0
+    functionalities = plain_source.get(plain_spec.FUNCTIONAL_REQUIREMENTS)
+    return len(functionalities) if functionalities is not None else 0
 
 
 def validate_functionalities_have_implementation_reqs(plain_source, module_name, has_requires=False) -> None:
@@ -201,148 +226,6 @@ def validate_functionalities_have_implementation_reqs(plain_source, module_name,
         raise PlainSyntaxError(message)
 
 
-def _is_acceptance_test_heading(token) -> tuple[bool, str | None]:
-    """
-    Check if token is an 'Acceptance test:' heading.
-
-    This method is going to evaluate to True when:
-
-    - The token is a Paragraph
-    - The paragraph has 1 child
-    - The child is an Emphasis (*** ... *** marker)
-    - The Emphasis has 1 child (the raw text content)
-    - The child of the Emphasis is a Strong
-    - The Strong has 1 child
-    - The child of the Strong is a RawText
-    - The RawText content is equal to "Acceptance test:"
-
-    This is expected structure for the acceptance test heading.
-    """
-    if not isinstance(token, Paragraph):
-        return False, None
-
-    # Check for the specific structure, descending one level at a time. mistletoe types
-    # ``children`` as ``Optional[Iterable[Token]]``, so cast each level to a concrete
-    # sequence before indexing/len.
-    children = cast("Sequence[Token]", token.children)
-    if len(children) != 1 or not isinstance(children[0], Emphasis):
-        return False, None
-
-    emphasis_children = cast("Sequence[Token]", children[0].children)
-    if len(emphasis_children) != 1 or not isinstance(emphasis_children[0], Strong):
-        return False, None
-
-    strong_children = cast("Sequence[Token]", emphasis_children[0].children)
-    if len(strong_children) != 1 or not isinstance(strong_children[0], RawText):
-        return False, None
-
-    # Check the actual text content
-    content = strong_children[0].content.strip()
-    if content == plain_spec.ACCEPTANCE_TEST_HEADING:
-        return True, None
-    problem = f"Syntax error at line {token.line_number}: Invalid acceptance test heading (`{content}`). Expected: `{plain_spec.ACCEPTANCE_TEST_HEADING}`."
-    return False, problem
-
-
-def _find_acceptance_test_heading(token):
-    """
-    Recursively search a token tree for an `acceptance tests` heading.
-
-    Returns the heading token if one is found anywhere in the subtree, otherwise None.
-    Used to detect acceptance tests nested under sections other than functional specs.
-    """
-    is_acceptance_test_heading, _ = _is_acceptance_test_heading(token)
-    if is_acceptance_test_heading:
-        return token
-
-    if getattr(token, "children", None):
-        for child in token.children:
-            found = _find_acceptance_test_heading(child)
-            if found is not None:
-                return found
-
-    return None
-
-
-def _process_single_acceptance_test_requirement(functional_requirement: mistletoe.block_token.ListItem):
-    """
-    Process a single functionality to extract acceptance tests.
-
-    Expected functional_requirement properties:
-    - Is a list item
-    - If acceptance tests are specified, it has 3 children:
-        - List item element with functionality instructions/text
-        - Paragraph with `***Acceptance test:***` heading
-        - List of acceptance tests
-    - If acceptance tests are not specified, it has 1 child:
-        - List item element with functionality instructions/text
-    """
-    new_children: list = []
-    functional_requirement_children = iter(functional_requirement.children or ())
-    acceptance_tests_found_already = False
-
-    for functional_requirement_child in functional_requirement_children:
-        is_acceptance_test_heading, acceptance_test_heading_problem = _is_acceptance_test_heading(
-            functional_requirement_child
-        )
-        if acceptance_test_heading_problem:
-            # Handle the case when the heading is not valid. This case includes cases such as:
-            # - Writing `acceptance test` instead of `acceptance tests` (or any other syntax diffs).
-            # - Instead of specifying `acceptance tests` below the functionality, creator of the plain file
-            #   might have specified some other building block (e.g. `implementation reqs`)
-            raise PlainSyntaxError(f"Plain syntax error: {acceptance_test_heading_problem}")
-
-        if is_acceptance_test_heading:
-            if acceptance_tests_found_already:
-                # Handle edge case of duplicated ***acceptance tests*** heading
-                raise PlainSyntaxError(
-                    f"Plain syntax error: Syntax error at line {functional_requirement_child.line_number}: Duplicate 'acceptance tests' heading found within the same functionality. Only one block of acceptance tests is allowed per functionality."
-                )
-
-            try:
-                # If there is an acceptance test heading, the next token should be a list, with children being list items
-                next_token = next(functional_requirement_children)
-                if isinstance(next_token, List):
-                    # Found valid acceptance test list -> Assign it property acceptance_tests and append all list items to it
-                    if not hasattr(functional_requirement, plain_spec.ACCEPTANCE_TESTS):
-                        functional_requirement.acceptance_tests = []
-                    for list_item in next_token.children:
-                        functional_requirement.acceptance_tests.append(list_item)
-                    acceptance_tests_found_already = True
-                else:
-                    # Not followed by a list, keep both tokens
-                    new_children.append(functional_requirement_child)
-                    new_children.append(next_token)
-            except StopIteration:
-                # No next token, keep this one
-                new_children.append(functional_requirement_child)
-        else:
-            # Regular token, keep it
-            new_children.append(functional_requirement_child)
-
-    # Assign the children property to all the children of the functionality from previous, with exception
-    # of those we parsed as acceptance tests
-    container_type = cast(type, type(functional_requirement.children))
-    functional_requirement.children = container_type(new_children)
-
-
-def process_acceptance_tests(plain_source):
-    # Early returns for cases without functionalities
-    if plain_spec.FUNCTIONAL_REQUIREMENTS not in plain_source:
-        return
-    frs = plain_source[plain_spec.FUNCTIONAL_REQUIREMENTS]
-    if not hasattr(frs, "children"):
-        return
-
-    # Process each functionality
-    for functional_requirement in frs.children:
-        if not hasattr(functional_requirement, "children"):
-            continue
-
-        # Process each requirement to extract acceptance tests
-        _process_single_acceptance_test_requirement(functional_requirement)
-
-
 def get_raw_text(token):
     if isinstance(token, RawText):
         yield token.content
@@ -357,16 +240,27 @@ def get_raw_text(token):
         raise Exception(f"Unknown token type: {type(token)}")
 
 
+def render_tokens(renderer: MarkdownRenderer, tokens) -> str:
+    """The block tokens rendered as one markdown text, without leading and trailing blank lines."""
+    document = mistletoe.Document("")
+    document.children = list(tokens)
+    return renderer.render(document).strip("\n")
+
+
+def marshall_functionality(renderer: MarkdownRenderer, functionality: Functionality) -> dict:
+    return {
+        "id": functionality.id,
+        "markdown": render_tokens(renderer, functionality.body),
+        "linked_resources": functionality.linked_resources,
+        plain_spec.CONFORMANCE_TESTS: [],
+        plain_spec.ACCEPTANCE_TESTS: [],
+    }
+
+
 def marshall_plain_source(input_plain_source):
     plain_source = {}
     with PlainRenderer() as renderer:
-        if "ID" in input_plain_source:
-            plain_source["ID"] = input_plain_source["ID"]
-
-        if "Heading" in input_plain_source:
-            plain_source["Heading"] = input_plain_source["Heading"]
-
-        for specification_heading in plain_spec.ALLOWED_SPECIFICATION_HEADINGS:
+        for specification_heading in plain_spec.LIST_SECTION_HEADINGS:
             if specification_heading in input_plain_source and hasattr(
                 input_plain_source[specification_heading], "children"
             ):
@@ -376,17 +270,15 @@ def marshall_plain_source(input_plain_source):
                     if hasattr(requirement, "linked_resources"):
                         requirement_section["linked_resources"] = requirement.linked_resources
 
-                    if hasattr(requirement, plain_spec.ACCEPTANCE_TESTS):
-                        requirement_section[plain_spec.ACCEPTANCE_TESTS] = []
-                        for acceptance_test in requirement.acceptance_tests:
-                            acceptance_test_section = {"markdown": renderer.render(acceptance_test).strip()}
-                            if hasattr(acceptance_test, "linked_resources"):
-                                acceptance_test_section["linked_resources"] = acceptance_test.linked_resources
-                            requirement_section[plain_spec.ACCEPTANCE_TESTS].append(acceptance_test_section)
-
                     list_of_requirements.append(requirement_section)
 
                 plain_source[specification_heading] = list_of_requirements
+
+        if plain_spec.FUNCTIONAL_REQUIREMENTS in input_plain_source:
+            plain_source[plain_spec.FUNCTIONAL_REQUIREMENTS] = [
+                marshall_functionality(renderer, functionality)
+                for functionality in input_plain_source[plain_spec.FUNCTIONAL_REQUIREMENTS] or []
+            ]
 
     return plain_source
 
@@ -474,6 +366,16 @@ def restore_stripped_lines(plain_source_text: str, content: str) -> str:
     return "\n" * stripped_line_count + content
 
 
+def syntax_error_at(line_number: int | None, module_name: str | None) -> str:
+    """`Syntax error at line N in module 'm'`, without the parts that are not known."""
+    where = "Syntax error"
+    if line_number is not None:
+        where += f" at line {line_number}"
+    if module_name:
+        where += f" in module '{module_name}'"
+    return where
+
+
 def read_plain_source_metadata(plain_source_text):
     try:
         plain_source_obj = frontmatter.loads(plain_source_text)
@@ -500,6 +402,142 @@ def read_plain_source_metadata(plain_source_text):
             plain_source_obj.metadata[directive] = prepared_metadata
 
     return plain_source_obj
+
+
+TEST_PLAIN_FILE_SECTION_HEADINGS = (plain_spec.CONFORMANCE_TEST_HEADING, plain_spec.ACCEPTANCE_TEST_HEADING)
+
+
+def check_no_test_sections(plain_source_full_text: str, module_name: str | None) -> None:
+    """Raise when a `***conformance tests***` or `***acceptance tests***` marker is anywhere in a spec plain file."""
+    for line_number, line in enumerate(plain_source_full_text.split("\n"), start=1):
+        for heading in TEST_PLAIN_FILE_SECTION_HEADINGS:
+            if line.strip() == f"***{heading}***":
+                raise PlainSyntaxError(
+                    f"Plain syntax error: {syntax_error_at(line_number, module_name)}: The `{heading}` section is not "
+                    f"allowed in a spec plain file; test scenarios live in test plain files."
+                )
+
+
+def section_marker(token: Paragraph) -> str | None:
+    """The name in a `***name***` paragraph, or None when the paragraph is not a section marker."""
+    paragraph_children = cast("Sequence[Token]", token.children)
+    if len(paragraph_children) != 1 or not isinstance(paragraph_children[0], Emphasis):
+        return None
+    emphasis_children = cast("Sequence[Token]", paragraph_children[0].children)
+    if len(emphasis_children) != 1 or not isinstance(emphasis_children[0], Strong):
+        return None
+    strong_children = cast("Sequence[Token]", emphasis_children[0].children)
+    return cast(RawText, strong_children[0]).content
+
+
+def read_sections(plain_source: dict, document: mistletoe.Document, module_name: str | None) -> None:  # noqa: C901
+    """Add the sections of the rendered spec plain file to ``plain_source``.
+
+    A list section holds a mistletoe Document whose children are its list items; ``functional specs`` holds a list
+    of Functionality items, one per `# <func-id>` heading, each with every block token up to the next heading or
+    section marker. Raise on the first structural error.
+    """
+    current_specification_heading = None
+    current_functionality: Functionality | None = None
+    processed_specification_headings = set[str]()
+    functionality_lines: dict[str, int] = {}  # func-id to the line of its heading
+
+    def close_functionality():
+        if current_functionality is not None and all(isinstance(t, BlankLine) for t in current_functionality.body):
+            raise PlainSyntaxError(
+                f"Plain syntax error: {syntax_error_at(current_functionality.line_number, module_name)}: "
+                f"Functionality `{current_functionality.id}` has no body."
+            )
+
+    for token in document.children:
+        if isinstance(token, BlankLine):
+            # Kept inside a functionality body, so its paragraphs stay apart; meaningless anywhere else.
+            if current_functionality is not None:
+                current_functionality.body.append(token)
+            continue
+        token_text = "".join(get_raw_text(token)).strip()
+        where = syntax_error_at(token.line_number, module_name)
+        in_functional_specs = current_specification_heading == plain_spec.FUNCTIONAL_REQUIREMENTS
+        if isinstance(token, Heading):
+            if not in_functional_specs:
+                raise PlainSyntaxError(
+                    f"Plain syntax error: {where}: A `# <func-id>` heading is allowed only in the "
+                    f"{plain_spec.FUNCTIONAL_REQUIREMENTS} section (`{token_text}`)."
+                )
+            if token.level != 1:
+                raise PlainSyntaxError(
+                    f"Plain syntax error: {where}: Invalid heading level {token.level} (`{token_text}`). "
+                    f"A functionality heading is `# <func-id>`."
+                )
+            if not plain_spec.is_semantic_id(token_text):
+                raise PlainSyntaxError(
+                    f"Plain syntax error: {where}: Invalid func-id (`{token_text}`). A func-id has only lowercase "
+                    f"letters, digits and hyphens."
+                )
+            if token_text in functionality_lines:
+                raise PlainSyntaxError(
+                    f"Plain syntax error: {where}: Duplicate func-id `{token_text}`; it is first used at line "
+                    f"{functionality_lines[token_text]}."
+                )
+            close_functionality()
+            functionality_lines[token_text] = token.line_number
+            current_functionality = Functionality(token_text, token.line_number)
+            plain_source[plain_spec.FUNCTIONAL_REQUIREMENTS].append(current_functionality)
+        elif isinstance(token, Paragraph):
+            specification_heading = section_marker(token)
+            if specification_heading is None:
+                if not in_functional_specs:
+                    raise PlainSyntaxError(f"Plain syntax error: {where}: Invalid specification (`{token_text}`)")
+                if current_functionality is None:
+                    raise PlainSyntaxError(
+                        f"Plain syntax error: {where}: Content before the first `# <func-id>` heading in the "
+                        f"{plain_spec.FUNCTIONAL_REQUIREMENTS} section (`{token_text}`). {PREVIOUS_SYNTAX_HINT}"
+                    )
+                current_functionality.body.append(token)
+                continue
+
+            if specification_heading not in plain_spec.ALLOWED_SPECIFICATION_HEADINGS:
+                raise PlainSyntaxError(
+                    f"Plain syntax error: {where}: Invalid specification heading (`{specification_heading}`). "
+                    f"Allowed headings: {', '.join(plain_spec.ALLOWED_SPECIFICATION_HEADINGS)}"
+                )
+
+            if specification_heading in processed_specification_headings:
+                raise PlainSyntaxError(
+                    f"Plain syntax error: {where}: Duplicate specification heading (`{specification_heading}`)"
+                )
+
+            if specification_heading == plain_spec.DEFINITIONS and current_specification_heading is not None:
+                raise PlainSyntaxError(
+                    f"Plain syntax error: {where}: Definitions specification must be the first specification in "
+                    f"the section (`{token_text}`)"
+                )
+
+            close_functionality()
+            current_functionality = None
+            current_specification_heading = specification_heading
+            if specification_heading == plain_spec.FUNCTIONAL_REQUIREMENTS:
+                plain_source[specification_heading] = []
+            elif plain_source[specification_heading] is None:
+                plain_source[specification_heading] = mistletoe.Document("")
+
+            processed_specification_headings.add(specification_heading)
+        elif isinstance(token, List) and not in_functional_specs:
+            if current_specification_heading is None:
+                raise PlainSyntaxError(f"Plain syntax error: {where}: Missing specification heading (`{token_text}`)")
+            plain_source[current_specification_heading].children.extend(token.children)
+        elif in_functional_specs:
+            # The body of a functionality is free text: a list at any indentation, a code block, or any other block.
+            if current_functionality is None:
+                raise PlainSyntaxError(
+                    f"Plain syntax error: {where}: Content before the first `# <func-id>` heading in the "
+                    f"{plain_spec.FUNCTIONAL_REQUIREMENTS} section (`{token_text}`). {PREVIOUS_SYNTAX_HINT}"
+                )
+            current_functionality.body.append(token)
+        else:
+            raise PlainSyntaxError(f"Plain syntax error: {where}: Invalid source structure (`{token_text}`)")
+
+    close_functionality()
 
 
 def parse_plain_source(  # noqa: C901
@@ -534,93 +572,15 @@ def parse_plain_source(  # noqa: C901
 
     plain_source_full_text = render_plain_source(plain_source_content, loaded_templates, code_variables)
 
-    plain_file = mistletoe.Document(io.StringIO(plain_source_full_text))
+    check_no_test_sections(plain_source_full_text, module_name)
+
+    # Parsed inside a renderer context, so blank lines become BlankLine tokens and survive in functionality bodies.
+    with PlainRenderer():
+        plain_file = mistletoe.Document(io.StringIO(plain_source_full_text))
 
     remove_quotes(plain_file)
 
-    current_specification_heading = None
-    processed_specification_headings = set[str]()
-    for token in plain_file.children:
-        token_text = "".join(get_raw_text(token)).strip()
-        if isinstance(token, Paragraph):
-            paragraph_children = cast("Sequence[Token]", token.children)
-            emphasis_children = (
-                cast("Sequence[Token]", paragraph_children[0].children)
-                if paragraph_children and isinstance(paragraph_children[0], Emphasis)
-                else ()
-            )
-            if not (
-                len(paragraph_children) == 1
-                and isinstance(paragraph_children[0], Emphasis)
-                and len(emphasis_children) == 1
-                and isinstance(emphasis_children[0], Strong)
-            ):
-
-                raise PlainSyntaxError(
-                    f"Plain syntax error: Syntax error at line {token.line_number}: Invalid specification (`{token_text}`)"
-                )
-
-            strong_children = cast("Sequence[Token]", emphasis_children[0].children)
-            specification_heading = cast(RawText, strong_children[0]).content
-
-            if specification_heading == plain_spec.ACCEPTANCE_TEST_HEADING:
-                raise PlainSyntaxError(
-                    f"Plain syntax error: Syntax error at line {token.line_number}: {plain_spec.ACCEPTANCE_TEST_HEADING} heading should be nested under specific functional spec."
-                )
-
-            if specification_heading not in plain_spec.ALLOWED_SPECIFICATION_HEADINGS:
-                raise PlainSyntaxError(
-                    f"Plain syntax error: Syntax error at line {token.line_number}: Invalid specification heading (`{specification_heading}`). Allowed headings: {', '.join(plain_spec.ALLOWED_SPECIFICATION_HEADINGS)}"
-                )
-
-            if (
-                specification_heading == plain_spec.FUNCTIONAL_REQUIREMENTS
-                and specification_heading not in plain_source
-            ):
-                plain_source[specification_heading] = None
-
-            if specification_heading in processed_specification_headings:
-                raise PlainSyntaxError(
-                    f"Plain syntax error: Syntax error at line {token.line_number}: Duplicate specification heading (`{specification_heading}`)"
-                )
-
-            if specification_heading == plain_spec.DEFINITIONS and current_specification_heading is not None:
-                raise PlainSyntaxError(
-                    f"Plain syntax error: Syntax error at line {token.line_number}: Definitions specification must be the first specification in the section (`{token_text}`)"
-                )
-
-            current_specification_heading = specification_heading
-            if plain_source[current_specification_heading] is None:
-                plain_source[current_specification_heading] = mistletoe.Document("")
-
-            processed_specification_headings.add(current_specification_heading)
-        elif isinstance(token, List):
-            if current_specification_heading is None:
-                raise PlainSyntaxError(
-                    f"Plain syntax error: Syntax error at line {token.line_number}: Missing specification heading (`{token_text}`)"
-                )
-            plain_source[current_specification_heading].children.extend(token.children)
-
-        else:
-            raise PlainSyntaxError(
-                f"Plain syntax error: Syntax error at line {token.line_number}: Invalid source structure (`{token_text}`)"
-            )
-
-    # Acceptance tests are only allowed nested under functional specs. Reject them when
-    # they are nested under any other section (e.g. definitions, implementation reqs, test reqs).
-    for non_functional_heading in (
-        plain_spec.DEFINITIONS,
-        plain_spec.NON_FUNCTIONAL_REQUIREMENTS,
-        plain_spec.TEST_REQUIREMENTS,
-    ):
-        section = plain_source.get(non_functional_heading)
-        if section is None:
-            continue
-        nested_acceptance_test_heading = _find_acceptance_test_heading(section)
-        if nested_acceptance_test_heading is not None:
-            raise PlainSyntaxError(
-                f"Plain syntax error: Syntax error at line {nested_acceptance_test_heading.line_number}: {plain_spec.ACCEPTANCE_TEST_HEADING} heading should be nested under specific functional spec."
-            )
+    read_sections(plain_source, plain_file, module_name)
 
     defined_concepts = set[str]()
     if plain_source[plain_spec.DEFINITIONS] is not None:
@@ -848,8 +808,8 @@ def validate_module_structure(plain_file_parse_result: PlainFileParseResult, mod
     if count_functionalities(plain_file_parse_result.plain_source) == 0:
         # ***functional specs*** section present but empty: invalid in every role. Syntax error.
         raise PlainSyntaxError(
-            f"Plain syntax error: Module '{module_name}' has an empty "
-            f"'{plain_spec.FUNCTIONAL_REQUIREMENTS}' section. At least one functionality must be specified."
+            f"Plain syntax error: Module '{module_name}' has a '{plain_spec.FUNCTIONAL_REQUIREMENTS}' section "
+            f"without a `# <func-id>` heading. {PREVIOUS_SYNTAX_HINT}"
         )
 
     validate_functionalities_have_implementation_reqs(
@@ -866,11 +826,9 @@ def validate_and_build_module_tree(
     code_variables: dict,
     template_dirs: list[str],
 ) -> dict:
-    """Merge exported definitions, validate acceptance tests, linked resources and concepts, and return the
-    marshalled plain source tree."""
+    """Merge exported definitions, validate linked resources and concepts, and return the marshalled plain source
+    tree."""
     process_exported_definitions(plain_file_parse_result.plain_source, exported_definitions)
-
-    process_acceptance_tests(plain_file_parse_result.plain_source)
 
     check_for_linked_resources(plain_file_parse_result.plain_source, template_dirs)
 
