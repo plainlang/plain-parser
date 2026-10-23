@@ -574,24 +574,25 @@ def test_functionality_body_may_start_with_a_list():
     assert _parse(plain_source)["functional specs"][0]["markdown"] == "  - A :Task: can be added."
 
 
-def test_flush_left_list_in_functional_specs_is_the_old_syntax(get_test_data_path):
+def test_bullets_without_a_heading_are_the_previous_syntax(get_test_data_path):
     with pytest.raises(PlainSyntaxError) as exc_info:
         plain_file.plain_file_parser("old_syntax_functional_specs.plain", [get_test_data_path("data/plainfileparser")])
 
     assert str(exc_info.value) == (
-        "Plain syntax error: Syntax error at line 11 in module 'old_syntax_functional_specs': A flush-left `- ` list "
-        "in the functional specs section is the old syntax; a functionality is a `# <func-id>` heading followed by "
-        "its body. Run the migrate-plain-syntax skill to convert the project."
+        "Plain syntax error: Syntax error at line 11 in module 'old_syntax_functional_specs': Content before the "
+        'first `# <func-id>` heading in the functional specs section (`Display "hello, world"`).'
     )
 
 
-def test_flush_left_list_after_a_heading_is_the_old_syntax():
+def test_flush_left_list_after_a_heading_is_body():
     plain_source = (
         _SPEC_HEAD + "***functional specs***\n\n# add-task\nA :Task: can be added.\n\n- A :Task: has a name.\n"
+        "    - Deeper, four spaces in.\n"
     )
 
-    with pytest.raises(PlainSyntaxError, match=re.escape("Syntax error at line 14: A flush-left `- ` list")):
-        plain_file.parse_plain_source(plain_source, {}, [], [], [])
+    assert _parse(plain_source)["functional specs"][0]["markdown"] == (
+        "A :Task: can be added.\n\n- A :Task: has a name.\n    - Deeper, four spaces in."
+    )
 
 
 @pytest.mark.parametrize("heading", ["acceptance tests", "conformance tests"])
@@ -696,10 +697,25 @@ def test_functionality_without_body_is_rejected(tail):
         plain_file.parse_plain_source(plain_source, {}, [], [], [])
 
 
-def test_code_block_in_functionality_body_is_rejected():
-    plain_source = _SPEC_HEAD + "***functional specs***\n\n# add-task\nA :Task: can be added.\n\n```\ntodo add\n```\n"
+def test_any_block_after_a_heading_is_body():
+    plain_source = _SPEC_HEAD + (
+        "***functional specs***\n\n# add-task\nA :Task: can be added.\n\n```\ntodo add\n```\n\n"
+        "| id | name |\n|---|---|\n| 1 | Buy milk |\n\n# list-tasks\nEvery :Task: is listed.\n"
+    )
 
-    with pytest.raises(PlainSyntaxError, match=re.escape("Syntax error at line 14: Invalid source structure")):
+    functionalities = _parse(plain_source)["functional specs"]
+
+    # The table is re-rendered with padded cells; the blank lines between the blocks are kept.
+    assert functionalities[0]["markdown"] == (
+        "A :Task: can be added.\n\n```\ntodo add\n```\n\n| id  | name     |\n| --- | -------- |\n| 1   | Buy milk |"
+    )
+    assert functionalities[1]["markdown"] == "Every :Task: is listed."
+
+
+def test_block_in_a_list_section_is_still_rejected():
+    plain_source = "***implementation reqs***\n\n- A req.\n\n```\ncode\n```\n"
+
+    with pytest.raises(PlainSyntaxError, match=re.escape("Syntax error at line 5: Invalid source structure")):
         plain_file.parse_plain_source(plain_source, {}, [], [], [])
 
 

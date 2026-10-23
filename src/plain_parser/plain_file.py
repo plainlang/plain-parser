@@ -10,7 +10,7 @@ import mistletoe
 import mistletoe.block_token
 from liquid2 import DictLoader, Environment
 from mistletoe.block_token import Heading, List, Paragraph, Quote
-from mistletoe.markdown_renderer import Fragment, MarkdownRenderer
+from mistletoe.markdown_renderer import BlankLine, Fragment, MarkdownRenderer
 from mistletoe.span_token import Emphasis, Link, RawText, SpanToken, Strong
 from mistletoe.token import Token
 from mistletoe.utils import traverse
@@ -428,13 +428,11 @@ def section_marker(token: Paragraph) -> str | None:
     return cast(RawText, strong_children[0]).content
 
 
-def read_sections(  # noqa: C901
-    plain_source: dict, document: mistletoe.Document, source_lines: list[str], module_name: str | None
-) -> None:
+def read_sections(plain_source: dict, document: mistletoe.Document, module_name: str | None) -> None:  # noqa: C901
     """Add the sections of the rendered core spec to ``plain_source``.
 
     A list section holds a mistletoe Document whose children are its list items; ``functional specs`` holds a list
-    of Functionality items, one per `# <func-id>` heading, each with the block tokens up to the next heading or
+    of Functionality items, one per `# <func-id>` heading, each with every block token up to the next heading or
     section marker. Raise on the first structural error.
     """
     current_specification_heading = None
@@ -443,13 +441,18 @@ def read_sections(  # noqa: C901
     functionality_lines: dict[str, int] = {}  # func-id to the line of its heading
 
     def close_functionality():
-        if current_functionality is not None and not current_functionality.body:
+        if current_functionality is not None and all(isinstance(t, BlankLine) for t in current_functionality.body):
             raise PlainSyntaxError(
                 f"Plain syntax error: {syntax_error_at(current_functionality.line_number, module_name)}: "
                 f"Functionality `{current_functionality.id}` has no body."
             )
 
     for token in document.children:
+        if isinstance(token, BlankLine):
+            # Kept inside a functionality body, so its paragraphs stay apart; meaningless anywhere else.
+            if current_functionality is not None:
+                current_functionality.body.append(token)
+            continue
         token_text = "".join(get_raw_text(token)).strip()
         where = syntax_error_at(token.line_number, module_name)
         in_functional_specs = current_specification_heading == plain_spec.FUNCTIONAL_REQUIREMENTS
@@ -517,19 +520,12 @@ def read_sections(  # noqa: C901
                 plain_source[specification_heading] = mistletoe.Document("")
 
             processed_specification_headings.add(specification_heading)
-        elif isinstance(token, List):
+        elif isinstance(token, List) and not in_functional_specs:
             if current_specification_heading is None:
                 raise PlainSyntaxError(f"Plain syntax error: {where}: Missing specification heading (`{token_text}`)")
-            if not in_functional_specs:
-                plain_source[current_specification_heading].children.extend(token.children)
-                continue
-
-            if not source_lines[token.line_number - 1][:1].isspace():
-                raise PlainSyntaxError(
-                    f"Plain syntax error: {where}: A flush-left `- ` list in the {plain_spec.FUNCTIONAL_REQUIREMENTS} "
-                    f"section is the old syntax; a functionality is a `# <func-id>` heading followed by its body. "
-                    f"{MIGRATION_HINT}"
-                )
+            plain_source[current_specification_heading].children.extend(token.children)
+        elif in_functional_specs:
+            # The body of a functionality is free text: a list at any indentation, a code block, or any other block.
             if current_functionality is None:
                 raise PlainSyntaxError(
                     f"Plain syntax error: {where}: Content before the first `# <func-id>` heading in the "
@@ -576,11 +572,13 @@ def parse_plain_source(  # noqa: C901
 
     check_no_test_sections(plain_source_full_text, module_name)
 
-    plain_file = mistletoe.Document(io.StringIO(plain_source_full_text))
+    # Parsed inside a renderer context, so blank lines become BlankLine tokens and survive in functionality bodies.
+    with PlainRenderer():
+        plain_file = mistletoe.Document(io.StringIO(plain_source_full_text))
 
     remove_quotes(plain_file)
 
-    read_sections(plain_source, plain_file, plain_source_full_text.split("\n"), module_name)
+    read_sections(plain_source, plain_file, module_name)
 
     defined_concepts = set[str]()
     if plain_source[plain_spec.DEFINITIONS] is not None:
