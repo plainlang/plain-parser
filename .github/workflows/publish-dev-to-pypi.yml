@@ -141,11 +141,24 @@ jobs:
   # re-posts without publishing again.
   notify:
     name: Notify Slack
-    needs: [build, publish-dev]
-    if: ${{ !cancelled() && vars.SLACK_CHANNEL_ID != '' && contains(fromJSON('["success", "failure"]'), needs.publish-dev.result) }}
+    needs: [pre-publish-checks, build, publish-dev]
+    if: ${{ !cancelled() && vars.SLACK_CHANNEL_ID != '' }}
     runs-on: ubuntu-latest
 
     steps:
+      - name: Notify Slack (checks failed)
+        if: ${{ needs.pre-publish-checks.result == 'failure' }}
+        uses: slackapi/slack-github-action@dcb1066f776dd043e64d0e8ba94ca15cc7e1875d # v4.0.0
+        with:
+          method: chat.postMessage
+          token: ${{ secrets.SLACK_BOT_TOKEN }}
+          errors: true
+          payload: |
+            channel: ${{ vars.SLACK_CHANNEL_ID }}
+            text: >-
+              *plain-parser*: dev build of `${{ github.sha }}` halted — pre-publish checks FAILED :x:. Nothing was published to PyPI.
+              See <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|the run log>.
+
       - name: Notify Slack (failure)
         if: ${{ needs.publish-dev.result == 'failure' }}
         uses: slackapi/slack-github-action@dcb1066f776dd043e64d0e8ba94ca15cc7e1875d # v4.0.0
