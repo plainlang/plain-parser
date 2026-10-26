@@ -145,6 +145,20 @@ jobs:
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # release/v1
 
+      # Before the success notice, so a failed success post cannot trigger it.
+      - name: Notify Slack (failure)
+        if: ${{ failure() && vars.SLACK_CHANNEL_ID != '' }}
+        uses: slackapi/slack-github-action@dcb1066f776dd043e64d0e8ba94ca15cc7e1875d # v4.0.0
+        with:
+          method: chat.postMessage
+          token: ${{ secrets.SLACK_BOT_TOKEN }}
+          errors: true
+          payload: |
+            channel: ${{ vars.SLACK_CHANNEL_ID }}
+            text: >-
+              *plain-parser*: Publishing `${{ github.ref_name }}` to PyPI FAILED :x:.
+              See <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|the run log>.
+
       # GitHub marks the release itself as a pre-release; the tag (v0.2.0rc1)
       # carries the same intent for PEP 440. pip and uv skip pre-releases by
       # default, so "--upgrade" would NOT pick one up. Tell people the command
@@ -174,16 +188,3 @@ jobs:
             text: >-
               *plain-parser*: `${{ github.ref_name }}` published to PyPI :white_check_mark:.
               Install with `pip install --upgrade plain-parser`.
-
-      - name: Notify Slack (failure)
-        if: ${{ failure() && vars.SLACK_CHANNEL_ID != '' }}
-        uses: slackapi/slack-github-action@dcb1066f776dd043e64d0e8ba94ca15cc7e1875d # v4.0.0
-        with:
-          method: chat.postMessage
-          token: ${{ secrets.SLACK_BOT_TOKEN }}
-          errors: true
-          payload: |
-            channel: ${{ vars.SLACK_CHANNEL_ID }}
-            text: >-
-              *plain-parser*: Publishing `${{ github.ref_name }}` to PyPI FAILED :x:.
-              See <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|the run log>.
