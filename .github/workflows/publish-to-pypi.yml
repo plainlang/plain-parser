@@ -32,17 +32,20 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      # Non-fatal: Slack being down must not block the release.
       - name: Notify Slack (start)
+        if: ${{ vars.SLACK_CHANNEL_ID != '' }}
         continue-on-error: true
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-          TAG: ${{ github.ref_name }}
-          ACTOR: ${{ github.actor }}
-        run: |
-          TEXT="*plain-parser*: Release \`$TAG\` published by *$ACTOR* — building and publishing to PyPI..."
-          curl -sS --fail -X POST "$SLACK_WEBHOOK_URL" \
-            -H 'Content-type: application/json' \
-            --data "$(jq -n --arg t "$TEXT" '{text:$t}')"
+        uses: slackapi/slack-github-action@dcb1066f776dd043e64d0e8ba94ca15cc7e1875d # v4.0.0
+        with:
+          method: chat.postMessage
+          token: ${{ secrets.SLACK_BOT_TOKEN }}
+          errors: true
+          payload: |
+            channel: ${{ vars.SLACK_CHANNEL_ID }}
+            text: >-
+              *plain-parser*: Release `${{ github.ref_name }}` published by *${{ github.actor }}*
+              — building and publishing to PyPI...
 
       - name: Install uv
         # uv provisions its own Python (honoring requires-python), so no
@@ -66,17 +69,17 @@ jobs:
           path: dist/
 
       - name: Notify Slack (build failure)
-        if: failure()
-        continue-on-error: true
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-          TAG: ${{ github.ref_name }}
-        run: |
-          RUN_URL="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
-          TEXT="*plain-parser*: Build of \`$TAG\` FAILED :x:. Nothing was published to PyPI. See <$RUN_URL|the run log>."
-          curl -sS --fail -X POST "$SLACK_WEBHOOK_URL" \
-            -H 'Content-type: application/json' \
-            --data "$(jq -n --arg t "$TEXT" '{text:$t}')"
+        if: ${{ failure() && vars.SLACK_CHANNEL_ID != '' }}
+        uses: slackapi/slack-github-action@dcb1066f776dd043e64d0e8ba94ca15cc7e1875d # v4.0.0
+        with:
+          method: chat.postMessage
+          token: ${{ secrets.SLACK_BOT_TOKEN }}
+          errors: true
+          payload: |
+            channel: ${{ vars.SLACK_CHANNEL_ID }}
+            text: >-
+              *plain-parser*: Build of `${{ github.ref_name }}` FAILED :x:. Nothing was published to PyPI.
+              See <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|the run log>.
 
   upload-release-assets:
     name: Upload assets to GitHub Release
@@ -101,17 +104,17 @@ jobs:
           gh release upload "$TAG" dist/* --clobber
 
       - name: Notify Slack (upload failure)
-        if: failure()
-        continue-on-error: true
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-          TAG: ${{ github.ref_name }}
-        run: |
-          RUN_URL="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
-          TEXT="*plain-parser*: Uploading \`$TAG\` to the GitHub Release FAILED :x:. Nothing was published to PyPI. See <$RUN_URL|the run log>."
-          curl -sS --fail -X POST "$SLACK_WEBHOOK_URL" \
-            -H 'Content-type: application/json' \
-            --data "$(jq -n --arg t "$TEXT" '{text:$t}')"
+        if: ${{ failure() && vars.SLACK_CHANNEL_ID != '' }}
+        uses: slackapi/slack-github-action@dcb1066f776dd043e64d0e8ba94ca15cc7e1875d # v4.0.0
+        with:
+          method: chat.postMessage
+          token: ${{ secrets.SLACK_BOT_TOKEN }}
+          errors: true
+          payload: |
+            channel: ${{ vars.SLACK_CHANNEL_ID }}
+            text: >-
+              *plain-parser*: Uploading `${{ github.ref_name }}` to the GitHub Release FAILED :x:. Nothing was published to PyPI.
+              See <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|the run log>.
 
   publish-to-pypi:
     name: Publish to PyPI
@@ -126,6 +129,13 @@ jobs:
       id-token: write
 
     steps:
+      # The tag (v0.2.0rc1) without its "v", for the install command in Slack.
+      - name: Version from tag
+        id: version
+        env:
+          TAG: ${{ github.ref_name }}
+        run: echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
       - name: Download distribution packages
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
@@ -135,37 +145,45 @@ jobs:
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # release/v1
 
-      - name: Notify Slack (success)
-        if: success()
-        continue-on-error: true
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-          # GitHub marks the release itself as a pre-release; the tag
-          # (v0.2.0rc1) carries the same intent for PEP 440.
-          IS_PRERELEASE: ${{ github.event.release.prerelease }}
-          TAG: ${{ github.ref_name }}
-        run: |
-          VERSION="${TAG#v}"
-          if [ "$IS_PRERELEASE" = "true" ]; then
-            # pip and uv skip pre-releases by default, so "--upgrade" would
-            # NOT pick this up. Tell people the command that actually works.
-            TEXT="*plain-parser*: pre-release \`$TAG\` published to PyPI :test_tube:. Normal installs are unaffected — try it with \`pip install --pre plain-parser==$VERSION\`."
-          else
-            TEXT="*plain-parser*: \`$TAG\` published to PyPI :white_check_mark:. Install with \`pip install --upgrade plain-parser\`."
-          fi
-          curl -sS --fail -X POST "$SLACK_WEBHOOK_URL" \
-            -H 'Content-type: application/json' \
-            --data "$(jq -n --arg t "$TEXT" '{text:$t}')"
+      # GitHub marks the release itself as a pre-release; the tag (v0.2.0rc1)
+      # carries the same intent for PEP 440. pip and uv skip pre-releases by
+      # default, so "--upgrade" would NOT pick one up. Tell people the command
+      # that actually works.
+      - name: Notify Slack (pre-release published)
+        if: ${{ success() && github.event.release.prerelease && vars.SLACK_CHANNEL_ID != '' }}
+        uses: slackapi/slack-github-action@dcb1066f776dd043e64d0e8ba94ca15cc7e1875d # v4.0.0
+        with:
+          method: chat.postMessage
+          token: ${{ secrets.SLACK_BOT_TOKEN }}
+          errors: true
+          payload: |
+            channel: ${{ vars.SLACK_CHANNEL_ID }}
+            text: >-
+              *plain-parser*: pre-release `${{ github.ref_name }}` published to PyPI :test_tube:.
+              Normal installs are unaffected — try it with `pip install --pre plain-parser==${{ steps.version.outputs.version }}`.
+
+      - name: Notify Slack (release published)
+        if: ${{ success() && !github.event.release.prerelease && vars.SLACK_CHANNEL_ID != '' }}
+        uses: slackapi/slack-github-action@dcb1066f776dd043e64d0e8ba94ca15cc7e1875d # v4.0.0
+        with:
+          method: chat.postMessage
+          token: ${{ secrets.SLACK_BOT_TOKEN }}
+          errors: true
+          payload: |
+            channel: ${{ vars.SLACK_CHANNEL_ID }}
+            text: >-
+              *plain-parser*: `${{ github.ref_name }}` published to PyPI :white_check_mark:.
+              Install with `pip install --upgrade plain-parser`.
 
       - name: Notify Slack (failure)
-        if: failure()
-        continue-on-error: true
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-          TAG: ${{ github.ref_name }}
-        run: |
-          RUN_URL="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
-          TEXT="*plain-parser*: Publishing \`$TAG\` to PyPI FAILED :x:. See <$RUN_URL|the run log>."
-          curl -sS --fail -X POST "$SLACK_WEBHOOK_URL" \
-            -H 'Content-type: application/json' \
-            --data "$(jq -n --arg t "$TEXT" '{text:$t}')"
+        if: ${{ failure() && vars.SLACK_CHANNEL_ID != '' }}
+        uses: slackapi/slack-github-action@dcb1066f776dd043e64d0e8ba94ca15cc7e1875d # v4.0.0
+        with:
+          method: chat.postMessage
+          token: ${{ secrets.SLACK_BOT_TOKEN }}
+          errors: true
+          payload: |
+            channel: ${{ vars.SLACK_CHANNEL_ID }}
+            text: >-
+              *plain-parser*: Publishing `${{ github.ref_name }}` to PyPI FAILED :x:.
+              See <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|the run log>.
