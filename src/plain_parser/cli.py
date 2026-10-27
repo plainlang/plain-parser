@@ -132,12 +132,13 @@ def parse_spec(
     template_dir: str | None,
     load_resources: bool,
     test_dirs: list[str] | None = None,
-    require_conformance_scenarios: bool = False,
+    require_test_plain_files: bool = False,
 ) -> ParseResult:
     """Parse the module, its requires chain and its test plain files, resolve the links, and walk the entry's
     FRIDs; raise on the first error.
 
-    ``test_dirs`` defaults to ``tests`` next to the module. With ``load_resources``, each module's linked files are
+    ``test_dirs`` defaults to ``tests`` next to the module. With ``require_test_plain_files``, every functionality needs a
+    test plain file bound to it. With ``load_resources``, each module's linked files are
     also read and checked (text only, no large base64 blob) right after that module's links are collected, so a
     resource error is reported before a FRID-walk error.
     """
@@ -151,7 +152,7 @@ def parse_spec(
     test_dirs = [os.path.abspath(test_dir) for test_dir in test_dirs]
 
     parsed = project.parse_project(
-        os.path.basename(plain_file_path), template_dirs, test_dirs, require_conformance_scenarios
+        os.path.basename(plain_file_path), template_dirs, test_dirs, require_test_plain_files
     )
     chain = parsed.chain
 
@@ -183,10 +184,10 @@ def check(
     plain_file_path: str,
     template_dir: str | None,
     test_dirs: list[str] | None = None,
-    require_conformance_scenarios: bool = False,
+    require_test_plain_files: bool = False,
 ) -> None:
     """Raise if the module, its requires chain, its test plain files, or its linked resources are invalid."""
-    parse_spec(plain_file_path, template_dir, True, test_dirs, require_conformance_scenarios)
+    parse_spec(plain_file_path, template_dir, True, test_dirs, require_test_plain_files)
 
 
 def _error_output(type_name: str, message: str) -> dict:
@@ -207,12 +208,12 @@ def parse(
     plain_file_path: str,
     template_dir: str | None,
     test_dirs: list[str] | None = None,
-    require_conformance_scenarios: bool = False,
+    require_test_plain_files: bool = False,
 ) -> int:
     """Print the parse result, or the parser error, as one UTF-8 JSON document on stdout; return the exit code."""
     output: dict
     try:
-        result = parse_spec(plain_file_path, template_dir, False, test_dirs, require_conformance_scenarios)
+        result = parse_spec(plain_file_path, template_dir, False, test_dirs, require_test_plain_files)
         output = {
             "format_version": PARSE_FORMAT_VERSION,
             "modules": [{"module": module_name, "tree": tree} for module_name, tree in result.modules],

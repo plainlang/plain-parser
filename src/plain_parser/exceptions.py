@@ -39,7 +39,7 @@ class ImportedModuleWithFunctionalitiesError(Exception):
     pass
 
 
-class MissingConformanceScenariosError(Exception):
-    """Raised when conformance tests are enabled and a functionality has no conformance scenario."""
+class MissingTestPlainFileError(Exception):
+    """Raised when conformance tests are enabled and a functionality has no test plain file bound to it."""
 
     pass

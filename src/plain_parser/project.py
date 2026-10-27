@@ -6,7 +6,7 @@ from dataclasses import dataclass
 import frontmatter
 
 from plain_parser import concept_utils, loaders, plain_file, plain_spec, test_plain_file
-from plain_parser.exceptions import MissingConformanceScenariosError, PlainSyntaxError, UnsupportedBase64Content
+from plain_parser.exceptions import MissingTestPlainFileError, PlainSyntaxError, UnsupportedBase64Content
 
 
 @dataclass
@@ -126,28 +126,32 @@ def bind_test_plain_files(
     return bound
 
 
-def check_conformance_scenarios(chain: list[tuple[str, dict]]) -> None:
-    """Raise for the first functionality of the chain, in render order, that has no conformance scenario."""
+def check_test_plain_files(chain: list[tuple[str, dict]], bound: list[BoundTestPlainFile]) -> None:
+    """Raise for the first functionality of the chain, in render order, that has no test plain file bound to it.
+
+    The sections of the file may be empty; the file itself is what the check asks for.
+    """
+    bound_functionalities = {(item.parsed.module, item.parsed.func_id) for item in bound}
     for module_name, tree in chain:
         for functionality in tree.get(plain_spec.FUNCTIONAL_REQUIREMENTS) or []:
-            if not functionality[plain_spec.CONFORMANCE_TESTS]:
-                func_id = functionality["id"]
-                raise MissingConformanceScenariosError(
-                    f"Functionality {module_name}:{func_id} has no conformance scenario. Add one in a test plain file "
-                    f"(by convention tests/{module_name}/{func_id}.plain) with the add-test-scenarios skill."
+            func_id = functionality["id"]
+            if (module_name, func_id) not in bound_functionalities:
+                raise MissingTestPlainFileError(
+                    f"Functionality {module_name}:{func_id} has no test plain file. Add one, by convention "
+                    f"tests/{module_name}/{func_id}.plain, with the add-test-scenarios skill."
                 )
 
 
 def parse_project(
-    plain_file_name: str, template_dirs: list[str], test_dirs: list[str], require_conformance_scenarios: bool
+    plain_file_name: str, template_dirs: list[str], test_dirs: list[str], require_test_plain_files: bool
 ) -> ProjectParseResult:
     """Parse a module with its requires chain and bind the test plain files under ``test_dirs`` to its functionalities.
 
     ``template_dirs[0]`` is the entry module's directory; test plain files are named relative to it. With
-    ``require_conformance_scenarios``, every functionality of every module in the chain needs a conformance scenario.
+    ``require_test_plain_files``, every functionality of every module in the chain needs a test plain file.
     """
     chain = plain_file.parse_module_chain(plain_file_name, template_dirs)
     bound = bind_test_plain_files(chain, test_dirs, template_dirs, template_dirs[0])
-    if require_conformance_scenarios:
-        check_conformance_scenarios(chain)
+    if require_test_plain_files:
+        check_test_plain_files(chain, bound)
     return ProjectParseResult(chain, bound)

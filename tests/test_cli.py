@@ -356,7 +356,7 @@ def test_check_project_with_test_plain_files_prints_ok(project_dir, capsys, monk
     assert _run_check(capsys, "todo.plain") == (0, "todo.plain: OK\n", "")
 
 
-def test_check_missing_conformance_scenario_names_the_functionality_and_the_skill(project_dir, tmp_path, capsys):
+def test_check_missing_test_plain_file_names_the_functionality_and_the_skill(project_dir, tmp_path, capsys):
     copy = _copy_project(project_dir, tmp_path)
     (copy / "tests" / "todo" / "list-tasks.plain").unlink()
 
@@ -364,12 +364,21 @@ def test_check_missing_conformance_scenario_names_the_functionality_and_the_skil
 
     assert (exit_code, out) == (1, "")
     assert err == (
-        "Error: Functionality todo:list-tasks has no conformance scenario. Add one in a test plain file "
-        "(by convention tests/todo/list-tasks.plain) with the add-test-scenarios skill.\n"
+        "Error: Functionality todo:list-tasks has no test plain file. Add one, by convention "
+        "tests/todo/list-tasks.plain, with the add-test-scenarios skill.\n"
     )
 
 
-def test_check_without_conformance_tests_script_needs_no_scenarios(project_dir, tmp_path, capsys):
+def test_check_minimal_test_plain_file_satisfies_the_completeness_check(project_dir, tmp_path, capsys):
+    copy = _copy_project(project_dir, tmp_path)
+    (copy / "tests" / "todo" / "list-tasks.plain").write_text(
+        "---\nmodule: todo\nfunc_id: list-tasks\n---\n***conformance tests***\n***acceptance tests***\n"
+    )
+
+    _assert_ok(_run_check(capsys, str(copy / "todo.plain")))
+
+
+def test_check_without_conformance_tests_script_needs_no_test_plain_files(project_dir, tmp_path, capsys):
     copy = _copy_project(project_dir, tmp_path)
     shutil.rmtree(copy / "tests")
     (copy / "config.yaml").write_text("unittests-script: test_scripts/run_unittests.sh\n")
@@ -410,7 +419,7 @@ def test_check_reads_test_dir_from_config(project_dir, tmp_path, capsys, monkeyp
 
     _assert_ok(_run_check(capsys, str(copy / "todo.plain")))
     (copy / "scenarios" / "todo" / "add-task.plain").unlink()
-    assert "todo:add-task has no conformance scenario" in _run_check(capsys, str(copy / "todo.plain"))[2]
+    assert "todo:add-task has no test plain file" in _run_check(capsys, str(copy / "todo.plain"))[2]
 
 
 def test_check_config_test_dir_replaces_the_default(project_dir, tmp_path, capsys):
@@ -420,7 +429,7 @@ def test_check_config_test_dir_replaces_the_default(project_dir, tmp_path, capsy
     exit_code, _, err = _run_check(capsys, str(copy / "todo.plain"))
 
     assert exit_code == 1
-    assert "todo:add-task has no conformance scenario" in err
+    assert "todo:add-task has no test plain file" in err
 
 
 def test_check_link_in_scenario_is_read(project_dir, tmp_path, capsys):
@@ -443,7 +452,7 @@ def test_check_test_dir_option_overrides_the_config_and_the_default(project_dir,
     (copy / "config.yaml").write_text("conformance-tests-script: run.sh\ntest-dir: does_not_exist\n")
     monkeypatch.chdir(tmp_path)  # the option is relative to the working directory
 
-    assert "todo:add-task has no conformance scenario" in _run_check(capsys, "project/todo.plain")[2]
+    assert "todo:add-task has no test plain file" in _run_check(capsys, "project/todo.plain")[2]
     _assert_ok(_run_check(capsys, "project/todo.plain", "--test-dir", "project/scenarios"))
 
 
@@ -452,7 +461,7 @@ def test_check_test_dir_option_can_be_repeated(project_dir, tmp_path, capsys):
     (copy / "more").mkdir()
     (copy / "tests" / "todo" / "list-tasks.plain").rename(copy / "more" / "list-tasks.plain")
 
-    assert "todo:list-tasks has no conformance scenario" in _run_check(capsys, str(copy / "todo.plain"))[2]
+    assert "todo:list-tasks has no test plain file" in _run_check(capsys, str(copy / "todo.plain"))[2]
     _assert_ok(
         _run_check(
             capsys, str(copy / "todo.plain"), "--test-dir", str(copy / "tests"), "--test-dir", str(copy / "more")
@@ -632,7 +641,7 @@ def test_parse_resources_include_the_links_of_the_scenarios(project_dir, tmp_pat
     assert _parse_output(out)["resources"] == {"listing.txt": "listing.txt"}
 
 
-def test_parse_missing_conformance_scenario_is_a_parser_error(project_dir, tmp_path, capsys):
+def test_parse_missing_test_plain_file_is_a_parser_error(project_dir, tmp_path, capsys):
     copy = _copy_project(project_dir, tmp_path)
     (copy / "tests" / "todo" / "list-tasks.plain").unlink()
 
@@ -640,7 +649,7 @@ def test_parse_missing_conformance_scenario_is_a_parser_error(project_dir, tmp_p
 
     assert exit_code == 1
     result = _parse_output(out)
-    assert result["type"] == "MissingConformanceScenariosError"
+    assert result["type"] == "MissingTestPlainFileError"
     assert "add-test-scenarios" in result["message"]
 
 

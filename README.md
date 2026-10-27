@@ -27,7 +27,7 @@ functionalities. They stop at the first error.
 
 Validates the module. In addition to the steps above it reads every linked file and rejects binary files and
 files holding a large base64 blob. When the config file names a `conformance-tests-script`, every functionality
-of every module in the chain needs at least one conformance scenario.
+of every module in the chain needs a test plain file bound to it; the sections of the file may be empty.
 
 ```
 $ plain-parser check my_spec.plain
@@ -37,7 +37,7 @@ my_spec.plain: OK
 Exit `0` when the module is valid. On an error, `Error: …` is written to stderr and the exit code is `1`. The
 message names the file and the line where known. The previous syntax (`- ` bullets instead of `# <func-id>`
 headings in `***functional specs***`, an `***acceptance tests***` section in a spec plain file) is reported as not
-supported. A functionality without a conformance scenario names the `add-test-scenarios` skill.
+supported. A functionality without a test plain file names the `add-test-scenarios` skill.
 
 ### `parse`
 
@@ -80,7 +80,7 @@ Test plain files are the `.plain` files under the test directories: those given 
 option for more than one), else the `test-dir` key of the config file (a string or a list), else `tests` next to
 the `.plain` file. A test directory that does not exist is skipped. Linked resources in a scenario are looked up
 as in a module. The `conformance-tests-script` key of the config file turns on the check that every
-functionality has a conformance scenario. Other config keys are ignored.
+functionality has a test plain file. Other config keys are ignored.
 
 | Exit code | Meaning |
 |---|---|
@@ -96,7 +96,7 @@ from plain_parser import plain_file_parser, project
 
 module_name, plain_source_tree, required_modules = plain_file_parser("my_spec.plain", ["."])
 
-result = project.parse_project("my_spec.plain", ["."], ["tests"], require_conformance_scenarios=True)
+result = project.parse_project("my_spec.plain", ["."], ["tests"], require_test_plain_files=True)
 chain = result.chain  # (module name, plain source tree) pairs, deepest ancestor first, the module itself last
 ```
 

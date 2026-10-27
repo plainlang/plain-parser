@@ -1,7 +1,7 @@
 import pytest
 
 from plain_parser import plain_spec, project
-from plain_parser.exceptions import MissingConformanceScenariosError, PlainSyntaxError
+from plain_parser.exceptions import MissingTestPlainFileError, PlainSyntaxError
 
 MODULE = (
     "***definitions***\n\n- :Task: is a thing to do.\n\n***implementation reqs***\n\n- A req.\n\n"
@@ -21,9 +21,9 @@ def scenario_file(module, func_id, conformance="", acceptance=""):
     )
 
 
-def parse(tmp_path, require_conformance_scenarios=False, test_dirs=None):
+def parse(tmp_path, require_test_plain_files=False, test_dirs=None):
     test_dirs = [str(tmp_path / "tests")] if test_dirs is None else test_dirs
-    return project.parse_project("todo.plain", [str(tmp_path)], test_dirs, require_conformance_scenarios)
+    return project.parse_project("todo.plain", [str(tmp_path)], test_dirs, require_test_plain_files)
 
 
 def functionalities(result, module="todo"):
@@ -242,19 +242,38 @@ def test_required_module_scenarios_do_not_see_the_top_modules_concepts(tmp_path)
         parse(tmp_path)
 
 
-def test_every_functionality_needs_a_conformance_scenario_when_required(tmp_path):
+def test_every_functionality_needs_a_test_plain_file_when_required(tmp_path):
     write(tmp_path / "todo.plain", MODULE)
     write(tmp_path / "tests" / "a.plain", scenario_file("todo", "add-task", "# works\nIt works.\n"))
-    write(tmp_path / "tests" / "b.plain", scenario_file("todo", "list-tasks", "", "# flows\nIt flows.\n"))
 
     parse(tmp_path)
-    with pytest.raises(MissingConformanceScenariosError) as exc_info:
-        parse(tmp_path, require_conformance_scenarios=True)
+    with pytest.raises(MissingTestPlainFileError) as exc_info:
+        parse(tmp_path, require_test_plain_files=True)
 
     assert str(exc_info.value) == (
-        "Functionality todo:list-tasks has no conformance scenario. Add one in a test plain file (by convention "
-        "tests/todo/list-tasks.plain) with the add-test-scenarios skill."
+        "Functionality todo:list-tasks has no test plain file. Add one, by convention tests/todo/list-tasks.plain, "
+        "with the add-test-scenarios skill."
     )
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        # The minimal file: the frontmatter and the two markers on adjacent lines.
+        "---\nmodule: todo\nfunc_id: list-tasks\n---\n***conformance tests***\n***acceptance tests***\n",
+        # The conventional placeholder comment in an empty conformance section.
+        "---\nmodule: todo\nfunc_id: list-tasks\n---\n\n***conformance tests***\n\n"
+        "> add conformance test scenarios here\n\n***acceptance tests***\n",
+    ],
+)
+def test_a_test_plain_file_with_empty_sections_satisfies_the_check(tmp_path, content):
+    write(tmp_path / "todo.plain", MODULE)
+    write(tmp_path / "tests" / "a.plain", scenario_file("todo", "add-task", "# works\nIt works.\n"))
+    write(tmp_path / "tests" / "b.plain", content)
+
+    result = parse(tmp_path, require_test_plain_files=True)
+
+    assert functionalities(result)["list-tasks"][plain_spec.CONFORMANCE_TESTS] == []
 
 
 def test_completeness_covers_the_required_modules_first(tmp_path):
@@ -264,5 +283,5 @@ def test_completeness_covers_the_required_modules_first(tmp_path):
     )
     write(tmp_path / "todo.plain", "---\nrequires:\n  - core\n---\n\n" + MODULE)
 
-    with pytest.raises(MissingConformanceScenariosError, match="Functionality core:store-task has no conformance"):
-        parse(tmp_path, require_conformance_scenarios=True)
+    with pytest.raises(MissingTestPlainFileError, match="Functionality core:store-task has no test plain file"):
+        parse(tmp_path, require_test_plain_files=True)

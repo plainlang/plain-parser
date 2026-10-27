@@ -57,9 +57,11 @@ def test_valid_file_binds_to_its_functionality_and_keeps_the_scenarios_verbatim(
     assert [scenario.line_number for scenario in parsed.scenarios] == [10, 14, 26, 33, 38]
 
 
-def test_both_sections_may_be_empty(fixtures_dir):
-    parsed = _parse(fixtures_dir, "empty_sections.plain")
+@pytest.mark.parametrize("file_name", ["empty_sections.plain", "minimal.plain", "comment_only_conformance.plain"])
+def test_both_sections_may_be_empty(fixtures_dir, file_name):
+    parsed = _parse(fixtures_dir, file_name)
 
+    assert (parsed.module, parsed.func_id) == ("task-manager", "add-task")
     assert (parsed.conformance_tests, parsed.acceptance_tests) == ([], [])
 
 
