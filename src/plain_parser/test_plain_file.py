@@ -100,11 +100,16 @@ def read_scenarios(rendered_text: str, name: str) -> dict[str, list[Scenario]]: 
     current_section: str | None = None
     current: Scenario | None = None
     body: list[str] = []
+    fence: str | None = None  # The marker of the open fenced code block (``` or ~~~), None outside one.
     heading_lines: dict[str, int] = {}  # scenario-id to the line of its heading
 
     def close_scenario() -> None:
         if current is None:
             return
+        if fence is not None:
+            raise _error(
+                f"{_at(current.line_number, name)}: Scenario `{current.id}` has a code fence that is not closed."
+            )
         lines = _trim_blank_lines(body)
         if not lines:
             raise _error(f"{_at(current.line_number, name)}: Scenario `{current.id}` has no text.")
@@ -112,6 +117,22 @@ def read_scenarios(rendered_text: str, name: str) -> dict[str, list[Scenario]]: 
 
     for line_number, line in enumerate(rendered_text.split("\n"), start=1):
         where = _at(line_number, name)
+        # Inside a fenced code block every line is body text: a `# ` line is not a heading there, a `***` line is
+        # not a section marker, and a `>` line is not a comment.
+        stripped = line.lstrip()
+        if stripped.startswith(("```", "~~~")):
+            marker = stripped[:3]
+            if fence is None:
+                fence = marker
+            elif fence == marker:
+                fence = None
+            if current is not None:
+                body.append(line)
+                continue
+        elif fence is not None and current is not None:
+            body.append(line)
+            continue
+
         if line.startswith("***"):
             heading = line.strip()[3:-3] if line.strip().endswith("***") and len(line.strip()) > 6 else None
             if heading not in SECTION_HEADINGS:

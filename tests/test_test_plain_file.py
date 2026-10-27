@@ -164,6 +164,64 @@ def test_scenario_id_syntax_is_checked(scenario_id):
         test_plain_file.parse_test_plain_file_source(text, "f.plain", [], {})
 
 
+_HEAD = "---\nmodule: todo\nfunc_id: add-task\n---\n\n***conformance tests***\n\n"
+_TAIL = "\n***acceptance tests***\n"
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        # A shell comment, and one that repeats a scenario-id.
+        '```bash\n# create an empty list, then add a task\n# add-first-task\ntodo add "Buy milk"\n```',
+        # A line that looks like a section marker.
+        "```\n***\ntodo 1.0\n***\n```",
+        # Lines that look like comments.
+        "```\n> todo add Buy milk\nAdded task 1: Buy milk\n> todo list\n```",
+        # A tilde fence, indented, with a backtick fence line inside it.
+        "  ~~~\n  # not a heading\n  ```\n  ~~~",
+    ],
+)
+def test_lines_inside_a_code_fence_are_scenario_text(body):
+    text = _HEAD + f"# add-first-task\nThe commands below add a task.\n\n{body}\nThe task is listed.\n" + _TAIL
+
+    parsed = test_plain_file.parse_test_plain_file_source(text, "add-task.plain", [], {})
+
+    assert [scenario.id for scenario in parsed.conformance_tests] == ["add-first-task"]
+    assert parsed.conformance_tests[0].text == f"The commands below add a task.\n\n{body}\nThe task is listed."
+
+
+def test_heading_after_a_closed_code_fence_starts_a_scenario():
+    text = _HEAD + "# first\n```\n# not a heading\n```\n\n# second\nIt works.\n" + _TAIL
+
+    parsed = test_plain_file.parse_test_plain_file_source(text, "add-task.plain", [], {})
+
+    assert [scenario.id for scenario in parsed.conformance_tests] == ["first", "second"]
+
+
+def test_code_fence_that_is_not_closed_is_rejected():
+    text = _HEAD + "# first\nIt works:\n```\ntodo add\n" + _TAIL
+
+    with pytest.raises(PlainSyntaxError) as exc_info:
+        test_plain_file.parse_test_plain_file_source(text, "add-task.plain", [], {})
+
+    assert str(exc_info.value) == (
+        "Plain syntax error: Syntax error at line 8 in test plain file 'add-task.plain': Scenario `first` has a code "
+        "fence that is not closed."
+    )
+
+
+def test_code_fence_before_the_first_scenario_is_content_before_a_heading():
+    text = _HEAD + "```\n# not a heading\n```\n\n# first\nIt works.\n" + _TAIL
+
+    with pytest.raises(
+        PlainSyntaxError,
+        match=re.escape(
+            "Syntax error at line 8 in test plain file 'add-task.plain': Content before the first `# <scenario-id>` heading"
+        ),
+    ):
+        test_plain_file.parse_test_plain_file_source(text, "add-task.plain", [], {})
+
+
 def test_invalid_frontmatter_is_rejected():
     with pytest.raises(PlainSyntaxError, match="Test plain file 'broken.plain' has invalid frontmatter"):
         test_plain_file.parse_test_plain_file_source("---\nmodule: [\n---\n", "broken.plain", [], {})
