@@ -146,6 +146,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Short SHA
+        run: echo "SHORT_SHA=${GITHUB_SHA:0:7}" >> "$GITHUB_ENV"
+
       - name: Notify Slack (checks failed)
         if: ${{ needs.pre-publish-checks.result == 'failure' }}
         uses: slackapi/slack-github-action@dcb1066f776dd043e64d0e8ba94ca15cc7e1875d # v4.0.0
@@ -156,7 +159,7 @@ jobs:
           payload: |
             channel: ${{ vars.SLACK_CHANNEL_ID }}
             text: >-
-              *plain-parser*: dev build of `${{ github.sha }}` halted — pre-publish checks FAILED :x:. Nothing was published to PyPI.
+              *plain-parser*: dev build of `${{ env.SHORT_SHA }}` halted — pre-publish checks FAILED :x:. Nothing was published to PyPI.
               See <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|the run log>.
 
       - name: Notify Slack (build failure)
@@ -169,7 +172,7 @@ jobs:
           payload: |
             channel: ${{ vars.SLACK_CHANNEL_ID }}
             text: >-
-              *plain-parser*: Building the dev build FAILED :x: (commit `${{ github.sha }}`). Nothing was published to PyPI.
+              *plain-parser*: Building the dev build FAILED :x: (commit `${{ env.SHORT_SHA }}`). Nothing was published to PyPI.
               See <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|the run log>.
 
       - name: Notify Slack (failure)
@@ -182,7 +185,7 @@ jobs:
           payload: |
             channel: ${{ vars.SLACK_CHANNEL_ID }}
             text: >-
-              *plain-parser*: Publishing dev build to PyPI FAILED :x: (commit `${{ github.sha }}`).
+              *plain-parser*: Publishing dev build to PyPI FAILED :x: (commit `${{ env.SHORT_SHA }}`).
               See <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|the run log>.
 
       # Spell out the --pre install: a plain "pip install plain-parser" will
