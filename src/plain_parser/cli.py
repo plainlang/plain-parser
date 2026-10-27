@@ -15,7 +15,6 @@ DEFAULT_CONFIG_NAME = "config.yaml"
 TEMPLATE_DIR_CONFIG_KEYS = ("template_dir", "template-dir")
 TEST_DIR_CONFIG_KEYS = ("test_dir", "test-dir")
 CONFORMANCE_TESTS_SCRIPT_CONFIG_KEYS = ("conformance_tests_script", "conformance-tests-script")
-DEFAULT_TEST_DIR = "tests"
 PARSE_FORMAT_VERSION = 2
 
 
@@ -49,7 +48,7 @@ def build_parser() -> argparse.ArgumentParser:
             action="append",
             metavar="DIR",
             help="Directory scanned for test plain files; repeat the option for more than one. Overrides the "
-            f"test-dir value of the config file. Defaults to {DEFAULT_TEST_DIR} next to the .plain file.",
+            "test-dir value of the config file. Without both, no test plain files are read.",
         )
         subparser.add_argument(
             "--config-name",
@@ -137,7 +136,7 @@ def parse_spec(
     """Parse the module, its requires chain and its test plain files, resolve the links, and walk the entry's
     FRIDs; raise on the first error.
 
-    ``test_dirs`` defaults to ``tests`` next to the module. With ``require_test_plain_files``, every functionality needs a
+    Without ``test_dirs`` no test plain files are read. With ``require_test_plain_files``, every functionality needs a
     test plain file bound to it. With ``load_resources``, each module's linked files are
     also read and checked (text only, no large base64 blob) right after that module's links are collected, so a
     resource error is reported before a FRID-walk error.
@@ -147,9 +146,7 @@ def parse_spec(
     template_dirs = [entry_dir]
     if template_dir:
         template_dirs.append(os.path.abspath(template_dir))
-    if test_dirs is None:
-        test_dirs = [os.path.join(entry_dir, DEFAULT_TEST_DIR)]
-    test_dirs = [os.path.abspath(test_dir) for test_dir in test_dirs]
+    test_dirs = [os.path.abspath(test_dir) for test_dir in test_dirs or []]
 
     parsed = project.parse_project(
         os.path.basename(plain_file_path), template_dirs, test_dirs, require_test_plain_files
@@ -276,6 +273,11 @@ def main(argv: list[str] | None = None) -> int:
         config = _read_config(parser, args)
         template_dir = args.template_dir or config.template_dir
         test_dirs = args.test_dir or config.test_dirs
+        if config.conformance_tests_enabled and not test_dirs:
+            parser.error(
+                "conformance-tests-script is set in the config file, but no test directory is given. "
+                "Pass --test-dir or set test-dir in the config file."
+            )
         if args.command == "parse":
             return parse(args.plain_file, template_dir, test_dirs, config.conformance_tests_enabled)
         check(args.plain_file, template_dir, test_dirs, config.conformance_tests_enabled)

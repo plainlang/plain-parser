@@ -77,8 +77,9 @@ When `--template-dir` is not given, it is read from the `template-dir` key of `c
 error. The config file is read even when `--template-dir` is given, so a malformed one fails the run either way.
 
 Test plain files are the `.plain` files under the test directories: those given with `--test-dir` (repeat the
-option for more than one), else the `test-dir` key of the config file (a string or a list), else `tests` next to
-the `.plain` file. A test directory that does not exist is skipped. Linked resources in a scenario are looked up
+option for more than one), else the `test-dir` key of the config file (a string or a list). Without both, no test
+plain files are read, and a config file that names a `conformance-tests-script` makes that a usage error. A test
+directory that does not exist is skipped. Linked resources in a scenario are looked up
 as in a module. The `conformance-tests-script` key of the config file turns on the check that every
 functionality has a test plain file. Other config keys are ignored.
 

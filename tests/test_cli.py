@@ -386,6 +386,33 @@ def test_check_without_conformance_tests_script_needs_no_test_plain_files(projec
     _assert_ok(_run_check(capsys, str(copy / "todo.plain")))
 
 
+def test_without_test_dir_no_test_plain_files_are_read(project_dir, tmp_path, capsys):
+    # The parser has no default test directory: tests/ next to the module is not scanned on its own.
+    copy = _copy_project(project_dir, tmp_path)
+    (copy / "config.yaml").unlink()
+    (copy / "tests" / "todo" / "add-task.plain").write_text("not a test plain file")
+
+    _assert_ok(_run_check(capsys, str(copy / "todo.plain")))
+    exit_code, out, _ = _run_parse(capsys, str(copy / "todo.plain"))
+    assert exit_code == 0
+    assert _parse_output(out)["test_plain_files"] == {}
+
+
+@pytest.mark.parametrize("command", ["check", "parse"])
+def test_conformance_tests_script_without_test_dir_is_usage_error(project_dir, tmp_path, capsys, command):
+    copy = _copy_project(project_dir, tmp_path)
+    (copy / "config.yaml").write_text("conformance-tests-script: run.sh\n")
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli.main([command, str(copy / "todo.plain")])
+
+    captured = capsys.readouterr()
+    assert exc_info.value.code == 2
+    assert captured.out == ""
+    assert "no test directory is given. Pass --test-dir or set test-dir in the config file." in captured.err
+    _assert_ok(_run_check(capsys, str(copy / "todo.plain"), "--test-dir", str(copy / "tests")))
+
+
 def test_check_test_plain_file_error_is_reported_with_its_file(project_dir, tmp_path, capsys):
     copy = _copy_project(project_dir, tmp_path)
     (copy / "tests" / "todo" / "list-tasks.plain").write_text(
@@ -422,7 +449,7 @@ def test_check_reads_test_dir_from_config(project_dir, tmp_path, capsys, monkeyp
     assert "todo:add-task has no test plain file" in _run_check(capsys, str(copy / "todo.plain"))[2]
 
 
-def test_check_config_test_dir_replaces_the_default(project_dir, tmp_path, capsys):
+def test_check_config_test_dir_is_the_only_directory_scanned(project_dir, tmp_path, capsys):
     copy = _copy_project(project_dir, tmp_path)
     (copy / "config.yaml").write_text("conformance-tests-script: run.sh\ntest-dir: scenarios\n")
 
@@ -446,7 +473,7 @@ def test_check_link_in_scenario_is_read(project_dir, tmp_path, capsys):
     assert err.startswith("Error: Referenced resource 'listing.bin' in module 'todo' is a binary file.")
 
 
-def test_check_test_dir_option_overrides_the_config_and_the_default(project_dir, tmp_path, capsys, monkeypatch):
+def test_check_test_dir_option_overrides_the_config(project_dir, tmp_path, capsys, monkeypatch):
     copy = _copy_project(project_dir, tmp_path)
     (copy / "tests").rename(copy / "scenarios")
     (copy / "config.yaml").write_text("conformance-tests-script: run.sh\ntest-dir: does_not_exist\n")
