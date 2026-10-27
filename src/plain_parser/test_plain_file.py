@@ -136,8 +136,8 @@ def read_scenarios(rendered_text: str, name: str) -> dict[str, list[Scenario]]: 
                 )
             if not plain_spec.is_semantic_id(scenario_id):
                 raise _error(
-                    f"{where}: Invalid scenario-id (`{scenario_id}`). A scenario-id has only lowercase letters, "
-                    f"digits and hyphens."
+                    f"{where}: Invalid scenario-id (`{scenario_id}`). A scenario-id is lowercase letters and digits, "
+                    f"with single hyphens between them."
                 )
             if scenario_id in heading_lines:
                 raise _error(

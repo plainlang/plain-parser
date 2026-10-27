@@ -217,3 +217,16 @@ def test_get_frids_range_unknown_end_raises():
 def test_get_frids_range_start_after_end_raises():
     with pytest.raises(plain_spec.InvalidFridArgument, match="must be before"):
         plain_spec.get_frids_range(_four_functionalities(), "f3", "f2")
+
+
+@pytest.mark.parametrize("text", ["a", "add-task", "add-task-2", "2", "a-b-c", "x1-y2"])
+def test_is_semantic_id_accepts_segments_joined_by_single_hyphens(text):
+    assert plain_spec.is_semantic_id(text) is True
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["", "-", "---", "-add-task", "add-task-", "add--task", "add_task", "Add-task", "add task", "add.task", "ädd"],
+)
+def test_is_semantic_id_rejects_other_shapes(text):
+    assert plain_spec.is_semantic_id(text) is False

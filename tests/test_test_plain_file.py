@@ -109,7 +109,8 @@ def test_both_sections_may_be_empty(fixtures_dir):
         (
             "invalid_scenario_id.plain",
             "Plain syntax error: Syntax error at line 8 in test plain file 'invalid_scenario_id.plain': Invalid "
-            "scenario-id (`Works Well`). A scenario-id has only lowercase letters, digits and hyphens.",
+            "scenario-id (`Works Well`). A scenario-id is lowercase letters and digits, with single hyphens between "
+            "them.",
         ),
         (
             "content_before_section.plain",
@@ -153,6 +154,14 @@ def test_missing_link_names_the_file_and_the_scenario(fixtures_dir):
 def test_link_to_a_plain_file_is_rejected(fixtures_dir):
     with pytest.raises(PlainSyntaxError, match=re.escape("Referenced resource 'valid.plain' in test plain file")):
         _parse(fixtures_dir, "link_to_plain_file.plain")
+
+
+@pytest.mark.parametrize("scenario_id", ["-works", "works-", "works--well", "-", "--", "works_well", "Works"])
+def test_scenario_id_syntax_is_checked(scenario_id):
+    text = f"---\nmodule: m\nfunc_id: f\n---\n\n***conformance tests***\n\n# {scenario_id}\nIt works.\n\n***acceptance tests***\n"
+
+    with pytest.raises(PlainSyntaxError, match=re.escape(f"Invalid scenario-id (`{scenario_id}`)")):
+        test_plain_file.parse_test_plain_file_source(text, "f.plain", [], {})
 
 
 def test_invalid_frontmatter_is_rejected():

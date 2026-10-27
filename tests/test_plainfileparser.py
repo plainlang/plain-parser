@@ -652,11 +652,14 @@ def test_func_id_with_other_characters_is_rejected(get_test_data_path):
 
     assert str(exc_info.value) == (
         "Plain syntax error: Syntax error at line 10 in module 'func_id_invalid': Invalid func-id (`Add Task 2`). "
-        "A func-id has only lowercase letters, digits and hyphens."
+        "A func-id is lowercase letters and digits, with single hyphens between them."
     )
 
 
-@pytest.mark.parametrize("heading", ["#", "# ", "# add_task", "# add-task!", "# Ädd"])
+@pytest.mark.parametrize(
+    "heading",
+    ["#", "# ", "# add_task", "# add-task!", "# Ädd", "# -add-task", "# add-task-", "# add--task", "# -", "# ---"],
+)
 def test_func_id_syntax_is_checked(heading):
     plain_source = _SPEC_HEAD + f"***functional specs***\n\n{heading}\nA :Task: can be added.\n"
 

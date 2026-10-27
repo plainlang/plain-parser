@@ -23,8 +23,9 @@ ALLOWED_SPECIFICATION_HEADINGS = [*LIST_SECTION_HEADINGS, FUNCTIONAL_REQUIREMENT
 
 ALLOWED_IMPORT_SPECIFICATION_HEADINGS = LIST_SECTION_HEADINGS
 
-# A func-id or scenario-id: lowercase letters, digits and hyphens.
-SEMANTIC_ID_PATTERN = re.compile(r"[a-z0-9-]+")
+# A func-id or scenario-id: segments of lowercase letters and digits, with one hyphen between segments. So a
+# hyphen never starts or ends an id, two hyphens never touch, and an id is never only hyphens.
+SEMANTIC_ID_PATTERN = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
 
 
 def is_semantic_id(text: str) -> bool:

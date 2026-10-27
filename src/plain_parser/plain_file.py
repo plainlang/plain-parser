@@ -471,8 +471,8 @@ def read_sections(plain_source: dict, document: mistletoe.Document, module_name:
                 )
             if not plain_spec.is_semantic_id(token_text):
                 raise PlainSyntaxError(
-                    f"Plain syntax error: {where}: Invalid func-id (`{token_text}`). A func-id has only lowercase "
-                    f"letters, digits and hyphens."
+                    f"Plain syntax error: {where}: Invalid func-id (`{token_text}`). A func-id is lowercase letters "
+                    f"and digits, with single hyphens between them."
                 )
             if token_text in functionality_lines:
                 raise PlainSyntaxError(
