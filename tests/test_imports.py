@@ -77,3 +77,9 @@ def test_scalar_concept_directive_is_a_list_of_one(directive):
     plain_source_obj = plain_file.read_plain_source_metadata(f'---\n{directive}: ":A:"\n---\n')
 
     assert plain_source_obj.metadata[directive] == ["- :A:"]
+
+
+@pytest.mark.parametrize("directive", ["exported_concepts", "required_concepts"])
+def test_non_string_concept_entry_is_a_syntax_error(directive):
+    with pytest.raises(PlainSyntaxError, match=f"Invalid {directive} metadata"):
+        plain_file.read_plain_source_metadata(f"---\n{directive}: [1]\n---\n")
