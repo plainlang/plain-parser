@@ -1,6 +1,6 @@
 import pytest
 
-from plain_parser import plain_file
+from plain_parser import concept_utils, plain_file
 from plain_parser.exceptions import ImportedModuleWithFunctionalitiesError, PlainSyntaxError
 
 
@@ -93,3 +93,13 @@ def test_imported_required_concept_without_concept_token_is_a_syntax_error(tmp_p
     )
     with pytest.raises(PlainSyntaxError, match="requires an invalid concept"):
         plain_file.parse_plain_source(plain_source_text, {}, [str(tmp_path)], [], [])
+
+
+@pytest.mark.parametrize("directive", ["exported_concepts", "required_concepts"])
+@pytest.mark.parametrize("entry, concepts", [(":A:", [":A:"]), (":A:, :B:", [":A:", ":B:"])])
+def test_unquoted_concept_in_block_list(directive, entry, concepts):
+    # YAML reads an unquoted `- :A:` as a mapping; real modules rely on it still naming :A:.
+    plain_source_obj = plain_file.read_plain_source_metadata(f"---\n{directive}:\n  - {entry}\n---\n")
+
+    [item] = plain_source_obj.metadata[directive]
+    assert concept_utils.extract_concepts_from_definition(item) == (concepts, [])
