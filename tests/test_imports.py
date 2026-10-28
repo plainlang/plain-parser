@@ -1,7 +1,7 @@
 import pytest
 
 from plain_parser import plain_file
-from plain_parser.exceptions import ImportedModuleWithFunctionalitiesError
+from plain_parser.exceptions import ImportedModuleWithFunctionalitiesError, PlainSyntaxError
 
 
 def test_imported_module_with_functionalities(load_test_data, get_test_data_path):
@@ -51,3 +51,29 @@ def test_diamond_imports(load_test_data, get_test_data_path):
         ],
         "functional specs": [{"markdown": '- Display "hello, world"'}],
     }
+
+
+@pytest.mark.parametrize("fixture", ["scalar_import", "scalar_import_single_char"])
+def test_scalar_import_is_a_list_of_one(load_test_data, get_test_data_path, fixture):
+    plain_source_text = load_test_data(f"data/imports/{fixture}/main.plain")
+    template_dirs = [get_test_data_path(f"data/imports/{fixture}")]
+    plain_file_parse_result = plain_file.parse_plain_source(plain_source_text, {}, template_dirs, [], [])
+
+    assert plain_file.marshall_plain_source(plain_file_parse_result.plain_source)["implementation reqs"] == [
+        {"markdown": '- The main executable file should be called "hello_world.py".'},
+        {"markdown": '- The main executable file should be called "hello_world.py".'},
+    ]
+
+
+@pytest.mark.parametrize("directive", ["import", "requires"])
+def test_non_string_module_entry_is_a_syntax_error(directive):
+    plain_source_text = f"---\n{directive}: [1]\n---\n\n***functional specs***\n\n- Display text\n"
+    with pytest.raises(PlainSyntaxError, match=f"Invalid {directive} metadata"):
+        plain_file.parse_plain_source(plain_source_text, {}, [], [], [])
+
+
+@pytest.mark.parametrize("directive", ["exported_concepts", "required_concepts"])
+def test_scalar_concept_directive_is_a_list_of_one(directive):
+    plain_source_obj = plain_file.read_plain_source_metadata(f'---\n{directive}: ":A:"\n---\n')
+
+    assert plain_source_obj.metadata[directive] == ["- :A:"]

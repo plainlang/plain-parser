@@ -37,6 +37,12 @@ def test_parse_module_chain_orders_required_modules_first(get_test_data_path):
         assert "functional specs" in plain_source_tree
 
 
+def test_scalar_requires_is_a_list_of_one(get_test_data_path):
+    chain = plain_file.parse_module_chain("scalar_requires_main.plain", [get_test_data_path("data/requires")])
+
+    assert [module_name for module_name, _ in chain] == ["chain_base", "scalar_requires_main"]
+
+
 def test_parse_module_chain_single_module(get_test_data_path):
     chain = plain_file.parse_module_chain("chain_base.plain", [get_test_data_path("data/requires")])
 
