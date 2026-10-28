@@ -448,10 +448,12 @@ def process_imports(
 
         if REQUIRED_CONCEPTS_DIRECTIVE in plain_file_parse_result.plain_source_obj.metadata:
             for item in plain_file_parse_result.plain_source_obj.metadata[REQUIRED_CONCEPTS_DIRECTIVE]:
-                assert isinstance(
-                    item, str
-                ), f"Syntax error: Invalid {REQUIRED_CONCEPTS_DIRECTIVE} metadata. Expected a string."
-                new_concepts, _ = concept_utils.extract_concepts_from_definition(item)
+                new_concepts, errors = concept_utils.extract_concepts_from_definition(item)
+                if errors:
+                    raise PlainSyntaxError(
+                        f"Plain syntax error: Module '{module_name}' requires an invalid concept (`{item}`). "
+                        f"Expected a concept token, e.g. :ConceptName:."
+                    )
                 required_concepts.extend(new_concepts)
 
             required_concepts.extend(plain_file_parse_result.required_concepts)
@@ -480,11 +482,17 @@ def read_plain_source_metadata(plain_source_text):
     except Exception as e:
         raise PlainSyntaxError(f"Plain syntax error: Invalid frontmatter: {e}")
 
+    for directive in [IMPORT_DIRECTIVE, REQUIRES_DIRECTIVE, EXPORTED_CONCEPTS_DIRECTIVE, REQUIRED_CONCEPTS_DIRECTIVE]:
+        if directive in plain_source_obj.metadata and not isinstance(plain_source_obj.metadata[directive], list):
+            plain_source_obj.metadata[directive] = [plain_source_obj.metadata[directive]]
+
+    for directive in [IMPORT_DIRECTIVE, REQUIRES_DIRECTIVE]:
+        for module_name in plain_source_obj.metadata.get(directive, []):
+            if not isinstance(module_name, str):
+                raise PlainSyntaxError(f"Plain syntax error: Invalid {directive} metadata. Expected a module name.")
+
     for directive in [EXPORTED_CONCEPTS_DIRECTIVE, REQUIRED_CONCEPTS_DIRECTIVE]:
         if directive in plain_source_obj.metadata:
-            assert isinstance(
-                plain_source_obj.metadata[directive], list
-            ), f"Syntax error: Invalid {directive} metadata. Expected a list."
             prepared_metadata = []
             for item in plain_source_obj.metadata[directive]:
                 if isinstance(item, dict):

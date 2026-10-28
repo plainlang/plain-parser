@@ -1,7 +1,7 @@
 import pytest
 
-from plain_parser import plain_file
-from plain_parser.exceptions import ImportedModuleWithFunctionalitiesError
+from plain_parser import concept_utils, plain_file
+from plain_parser.exceptions import ImportedModuleWithFunctionalitiesError, PlainSyntaxError
 
 
 def test_imported_module_with_functionalities(load_test_data, get_test_data_path):
@@ -51,3 +51,55 @@ def test_diamond_imports(load_test_data, get_test_data_path):
         ],
         "functional specs": [{"markdown": '- Display "hello, world"'}],
     }
+
+
+@pytest.mark.parametrize("fixture", ["scalar_import", "scalar_import_single_char"])
+def test_scalar_import_is_a_list_of_one(load_test_data, get_test_data_path, fixture):
+    plain_source_text = load_test_data(f"data/imports/{fixture}/main.plain")
+    template_dirs = [get_test_data_path(f"data/imports/{fixture}")]
+    plain_file_parse_result = plain_file.parse_plain_source(plain_source_text, {}, template_dirs, [], [])
+
+    assert plain_file.marshall_plain_source(plain_file_parse_result.plain_source)["implementation reqs"] == [
+        {"markdown": '- The main executable file should be called "hello_world.py".'},
+        {"markdown": '- The main executable file should be called "hello_world.py".'},
+    ]
+
+
+@pytest.mark.parametrize("directive", ["import", "requires"])
+def test_non_string_module_entry_is_a_syntax_error(directive):
+    plain_source_text = f"---\n{directive}: [1]\n---\n\n***functional specs***\n\n- Display text\n"
+    with pytest.raises(PlainSyntaxError, match=f"Invalid {directive} metadata"):
+        plain_file.parse_plain_source(plain_source_text, {}, [], [], [])
+
+
+@pytest.mark.parametrize("directive", ["exported_concepts", "required_concepts"])
+def test_scalar_concept_directive_is_a_list_of_one(directive):
+    plain_source_obj = plain_file.read_plain_source_metadata(f'---\n{directive}: ":A:"\n---\n')
+
+    assert plain_source_obj.metadata[directive] == ["- :A:"]
+
+
+@pytest.mark.parametrize("directive", ["exported_concepts", "required_concepts"])
+def test_non_string_concept_entry_is_a_syntax_error(directive):
+    with pytest.raises(PlainSyntaxError, match=f"Invalid {directive} metadata"):
+        plain_file.read_plain_source_metadata(f"---\n{directive}: [1]\n---\n")
+
+
+@pytest.mark.parametrize("value", ["foo", "[foo]"])
+def test_imported_required_concept_without_concept_token_is_a_syntax_error(tmp_path, value):
+    (tmp_path / "lib.plain").write_text(f"---\nrequired_concepts: {value}\n---\n\n***implementation reqs***\n\n- x\n")
+    plain_source_text = (
+        "---\nimport: [lib]\n---\n\n***implementation reqs***\n\n- y\n\n***functional specs***\n\n- Display text\n"
+    )
+    with pytest.raises(PlainSyntaxError, match="requires an invalid concept"):
+        plain_file.parse_plain_source(plain_source_text, {}, [str(tmp_path)], [], [])
+
+
+@pytest.mark.parametrize("directive", ["exported_concepts", "required_concepts"])
+@pytest.mark.parametrize("entry, concepts", [(":A:", [":A:"]), (":A:, :B:", [":A:", ":B:"])])
+def test_unquoted_concept_in_block_list(directive, entry, concepts):
+    # YAML reads an unquoted `- :A:` as a mapping; real modules rely on it still naming :A:.
+    plain_source_obj = plain_file.read_plain_source_metadata(f"---\n{directive}:\n  - {entry}\n---\n")
+
+    [item] = plain_source_obj.metadata[directive]
+    assert concept_utils.extract_concepts_from_definition(item) == (concepts, [])

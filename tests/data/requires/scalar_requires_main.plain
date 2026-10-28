@@ -1,0 +1,11 @@
+---
+requires: chain_base
+---
+
+***implementation reqs***
+
+- Scalar requires implementation requirement.
+
+***functional specs***
+
+- A scalar requires functionality.
