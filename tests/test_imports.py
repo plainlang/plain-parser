@@ -83,3 +83,13 @@ def test_scalar_concept_directive_is_a_list_of_one(directive):
 def test_non_string_concept_entry_is_a_syntax_error(directive):
     with pytest.raises(PlainSyntaxError, match=f"Invalid {directive} metadata"):
         plain_file.read_plain_source_metadata(f"---\n{directive}: [1]\n---\n")
+
+
+@pytest.mark.parametrize("value", ["foo", "[foo]"])
+def test_imported_required_concept_without_concept_token_is_a_syntax_error(tmp_path, value):
+    (tmp_path / "lib.plain").write_text(f"---\nrequired_concepts: {value}\n---\n\n***implementation reqs***\n\n- x\n")
+    plain_source_text = (
+        "---\nimport: [lib]\n---\n\n***implementation reqs***\n\n- y\n\n***functional specs***\n\n- Display text\n"
+    )
+    with pytest.raises(PlainSyntaxError, match="requires an invalid concept"):
+        plain_file.parse_plain_source(plain_source_text, {}, [str(tmp_path)], [], [])

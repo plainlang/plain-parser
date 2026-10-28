@@ -448,7 +448,12 @@ def process_imports(
 
         if REQUIRED_CONCEPTS_DIRECTIVE in plain_file_parse_result.plain_source_obj.metadata:
             for item in plain_file_parse_result.plain_source_obj.metadata[REQUIRED_CONCEPTS_DIRECTIVE]:
-                new_concepts, _ = concept_utils.extract_concepts_from_definition(item)
+                new_concepts, errors = concept_utils.extract_concepts_from_definition(item)
+                if errors:
+                    raise PlainSyntaxError(
+                        f"Plain syntax error: Module '{module_name}' requires an invalid concept (`{item}`). "
+                        f"Expected a concept token, e.g. :ConceptName:."
+                    )
                 required_concepts.extend(new_concepts)
 
             required_concepts.extend(plain_file_parse_result.required_concepts)
