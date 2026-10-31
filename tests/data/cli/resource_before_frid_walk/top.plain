@@ -9,6 +9,8 @@ requires:
 
 ***functional specs***
 
-- :Implementation: names {% include "snippet.plain", name: "first" %}.
+# implementation-names-include-snippet-plain
+:Implementation: names {% include "snippet.plain", name: "first" %}.
 
-- :Implementation: names {% include "snippet.plain", name: "second" %}.
+# implementation-names-include-snippet-plain-2
+:Implementation: names {% include "snippet.plain", name: "second" %}.
