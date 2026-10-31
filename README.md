@@ -15,11 +15,11 @@ pip install plain-parser
 ## Command line
 
 ```
-plain-parser check <file.plain> [--template-dir DIR] [--test-dir DIR]... [--config-name NAME]
-plain-parser parse <file.plain> [--template-dir DIR] [--test-dir DIR]... [--config-name NAME]
+plain-parser check <file.plain> [--template-dir DIR] [--tests-folder DIR]... [--config-name NAME]
+plain-parser parse <file.plain> [--template-dir DIR] [--tests-folder DIR]... [--config-name NAME]
 ```
 
-Both commands parse the module and its `requires` chain, bind the test plain files under the test directories to the
+Both commands parse the module and its `requires` chain, bind the test plain files under the tests folders to the
 functionalities, check that every linked resource is an existing file (not a directory), and walk the module's
 functionalities. They stop at the first error.
 
@@ -76,8 +76,8 @@ When `--template-dir` is not given, it is read from the `template-dir` key of `c
 `--config-name`), found next to the `.plain` file or in the working directory. Finding it in both is a usage
 error. The config file is read even when `--template-dir` is given, so a malformed one fails the run either way.
 
-Test plain files are the `.plain` files under the test directories: those given with `--test-dir` (repeat the
-option for more than one), else the `test-dir` key of the config file (a string or a list). Without both, no test
+Test plain files are the `.plain` files under the tests folders: those given with `--tests-folder` (repeat the
+option for more than one), else the `tests-folder` key of the config file (a string or a list). Without both, no test
 plain files are read, and a config file that names a `conformance-tests-script` makes that a usage error. A test
 directory that does not exist is skipped. Linked resources in a scenario are looked up
 as in a module. The `conformance-tests-script` key of the config file turns on the check that every

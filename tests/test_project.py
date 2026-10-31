@@ -21,9 +21,9 @@ def scenario_file(module, func_id, conformance="", acceptance=""):
     )
 
 
-def parse(tmp_path, require_test_plain_files=False, test_dirs=None):
-    test_dirs = [str(tmp_path / "tests")] if test_dirs is None else test_dirs
-    return project.parse_project("todo.plain", [str(tmp_path)], test_dirs, require_test_plain_files)
+def parse(tmp_path, require_test_plain_files=False, tests_folders=None):
+    tests_folders = [str(tmp_path / "tests")] if tests_folders is None else tests_folders
+    return project.parse_project("todo.plain", [str(tmp_path)], tests_folders, require_test_plain_files)
 
 
 def functionalities(result, module="todo"):
@@ -86,18 +86,18 @@ def test_files_bound_to_one_functionality_merge_in_path_order(tmp_path):
     ]
 
 
-def test_test_dirs_are_read_in_the_given_order(tmp_path):
+def test_tests_folders_are_read_in_the_given_order(tmp_path):
     write(tmp_path / "todo.plain", MODULE)
     write(tmp_path / "more" / "b.plain", scenario_file("todo", "add-task", "# from-b\nFrom b.\n"))
     write(tmp_path / "tests" / "a.plain", scenario_file("todo", "add-task", "# from-a\nFrom a.\n"))
 
-    result = parse(tmp_path, test_dirs=[str(tmp_path / "more"), str(tmp_path / "tests")])
+    result = parse(tmp_path, tests_folders=[str(tmp_path / "more"), str(tmp_path / "tests")])
 
     assert scenario_ids(functionalities(result)["add-task"], plain_spec.CONFORMANCE_TESTS) == ["from-b", "from-a"]
     assert [bound.name for bound in result.test_plain_files] == ["more/b.plain", "tests/a.plain"]
 
 
-def test_missing_test_dir_is_not_an_error(tmp_path):
+def test_missing_tests_folder_is_not_an_error(tmp_path):
     write(tmp_path / "todo.plain", MODULE)
 
     result = parse(tmp_path)
@@ -153,7 +153,7 @@ def test_unknown_func_id_is_rejected(tmp_path):
     )
 
 
-def test_plain_file_under_test_dir_without_binding_keys_is_rejected(tmp_path):
+def test_plain_file_under_tests_folder_without_binding_keys_is_rejected(tmp_path):
     write(tmp_path / "todo.plain", MODULE)
     write(tmp_path / "tests" / "helper.plain", "***definitions***\n\n- :Helper: helps.\n")
 
@@ -161,16 +161,18 @@ def test_plain_file_under_test_dir_without_binding_keys_is_rejected(tmp_path):
         parse(tmp_path)
 
     assert str(exc_info.value) == (
-        "Plain syntax error: File 'tests/helper.plain' is under a test folder but is not a test plain file: its "
+        "Plain syntax error: File 'tests/helper.plain' is under a tests folder but is not a test plain file: its "
         "frontmatter needs the keys `module:` and `func_id:`."
     )
 
 
-def test_file_under_test_dir_with_invalid_frontmatter_is_rejected(tmp_path):
+def test_file_under_tests_folder_with_invalid_frontmatter_is_rejected(tmp_path):
     write(tmp_path / "todo.plain", MODULE)
     write(tmp_path / "tests" / "broken.plain", "---\nmodule: [\n---\n")
 
-    with pytest.raises(PlainSyntaxError, match="File 'tests/broken.plain' under a test folder has invalid frontmatter"):
+    with pytest.raises(
+        PlainSyntaxError, match="File 'tests/broken.plain' under a tests folder has invalid frontmatter"
+    ):
         parse(tmp_path)
 
 

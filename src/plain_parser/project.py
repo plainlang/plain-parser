@@ -23,14 +23,14 @@ class ProjectParseResult:
     test_plain_files: list[BoundTestPlainFile]
 
 
-def discover_test_plain_files(test_dirs: list[str], entry_dir: str) -> list[tuple[str, str]]:
-    """(path, name) of every .plain file under the test dirs: test dir by test dir, and within one by path. A
-    test dir that does not exist is skipped."""
+def discover_test_plain_files(tests_folders: list[str], entry_dir: str) -> list[tuple[str, str]]:
+    """(path, name) of every .plain file under the tests folders: tests folder by tests folder, and within one by path. A
+    tests folder that does not exist is skipped."""
     found = []
-    for test_dir in test_dirs:
-        if not os.path.isdir(test_dir):
+    for tests_folder in tests_folders:
+        if not os.path.isdir(tests_folder):
             continue
-        for root, dirs, files in os.walk(test_dir):
+        for root, dirs, files in os.walk(tests_folder):
             dirs.sort()
             for file_name in sorted(files):
                 if file_name.endswith(plain_file.PLAIN_SOURCE_FILE_EXTENSION):
@@ -46,7 +46,7 @@ def read_test_plain_file_text(path: str, name: str) -> str:
     try:
         text = raw.decode("utf-8")
     except UnicodeDecodeError:
-        raise PlainSyntaxError(f"Plain syntax error: File '{name}' under a test folder is not a text file.")
+        raise PlainSyntaxError(f"Plain syntax error: File '{name}' under a tests folder is not a text file.")
 
     blob = loaders.find_large_base64_blob(text)
     if blob is not None:
@@ -58,11 +58,11 @@ def read_test_plain_file_text(path: str, name: str) -> str:
 
 
 def bind_test_plain_files(
-    chain: list[tuple[str, dict]], test_dirs: list[str], template_dirs: list[str], entry_dir: str
+    chain: list[tuple[str, dict]], tests_folders: list[str], template_dirs: list[str], entry_dir: str
 ) -> list[BoundTestPlainFile]:
-    """Read every test plain file under the test dirs and add its scenarios to the functionality it binds to.
+    """Read every test plain file under the tests folders and add its scenarios to the functionality it binds to.
 
-    A `.plain` file under a test dir without the `module:` and `func_id:` keys is an error, as is a file that binds to
+    A `.plain` file under a tests folder without the `module:` and `func_id:` keys is an error, as is a file that binds to
     a module outside the chain or to a func-id the module does not have. The concepts of the scenarios must be
     visible to the bound module. Files bound to one functionality are merged in discovery order; a scenario-id is
     unique across that merged set.
@@ -70,17 +70,17 @@ def bind_test_plain_files(
     trees = dict(chain)
     bound = []
     scenario_places: dict[tuple[str, str], dict[str, str]] = {}  # (module, func-id) -> scenario-id -> place
-    for path, name in discover_test_plain_files(test_dirs, entry_dir):
+    for path, name in discover_test_plain_files(tests_folders, entry_dir):
         text = read_test_plain_file_text(path, name)
         try:
             metadata = frontmatter.loads(text).metadata
         except Exception as e:
             raise PlainSyntaxError(
-                f"Plain syntax error: File '{name}' under a test folder has invalid frontmatter: {e}"
+                f"Plain syntax error: File '{name}' under a tests folder has invalid frontmatter: {e}"
             )
         if not test_plain_file.is_test_plain_file(metadata):
             raise PlainSyntaxError(
-                f"Plain syntax error: File '{name}' is under a test folder but is not a test plain file: its "
+                f"Plain syntax error: File '{name}' is under a tests folder but is not a test plain file: its "
                 f"frontmatter needs the keys `module:` and `func_id:`."
             )
 
@@ -143,15 +143,15 @@ def check_test_plain_files(chain: list[tuple[str, dict]], bound: list[BoundTestP
 
 
 def parse_project(
-    plain_file_name: str, template_dirs: list[str], test_dirs: list[str], require_test_plain_files: bool
+    plain_file_name: str, template_dirs: list[str], tests_folders: list[str], require_test_plain_files: bool
 ) -> ProjectParseResult:
-    """Parse a module with its requires chain and bind the test plain files under ``test_dirs`` to its functionalities.
+    """Parse a module with its requires chain and bind the test plain files under ``tests_folders`` to its functionalities.
 
     ``template_dirs[0]`` is the entry module's directory; test plain files are named relative to it. With
     ``require_test_plain_files``, every functionality of every module in the chain needs a test plain file.
     """
     chain = plain_file.parse_module_chain(plain_file_name, template_dirs)
-    bound = bind_test_plain_files(chain, test_dirs, template_dirs, template_dirs[0])
+    bound = bind_test_plain_files(chain, tests_folders, template_dirs, template_dirs[0])
     if require_test_plain_files:
         check_test_plain_files(chain, bound)
     return ProjectParseResult(chain, bound)
