@@ -127,17 +127,39 @@ def test_same_scenario_id_for_two_functionalities_is_allowed(tmp_path):
     parse(tmp_path)
 
 
-def test_unknown_module_is_rejected(tmp_path):
+def test_a_file_of_a_module_outside_the_chain_is_passed_over(tmp_path):
+    """One tests folder may serve several self-standing specs, each rendered on its own."""
+    write(tmp_path / "todo.plain", MODULE)
+    write(tmp_path / "tests" / "todo" / "add-task.plain", scenario_file("todo", "add-task", "# works\nIt works.\n"))
+    write(tmp_path / "tests" / "notes" / "add-note.plain", scenario_file("notes", "add-note", "# works\nIt works.\n"))
+
+    result = parse(tmp_path)
+
+    assert [bound.name for bound in result.test_plain_files] == ["tests/todo/add-task.plain"]
+    assert scenario_ids(functionalities(result)["add-task"], plain_spec.CONFORMANCE_TESTS) == ["works"]
+
+
+def test_a_file_outside_the_chain_is_not_read_at_all(tmp_path):
+    """Its content is written against its own spec, so it must not be held to this one."""
+    write(tmp_path / "todo.plain", MODULE)
+    write(
+        tmp_path / "tests" / "notes" / "add-note.plain",
+        "---\nmodule: notes\nfunc_id: add-note\n---\n\n***conformance tests***\n\n# works\nA :Note: works.\n",
+    )
+
+    result = parse(tmp_path)
+
+    assert result.test_plain_files == []
+
+
+def test_a_module_name_that_is_a_typo_leaves_the_functionality_without_a_test_plain_file(tmp_path):
     write(tmp_path / "todo.plain", MODULE)
     write(tmp_path / "tests" / "a.plain", scenario_file("tasks", "add-task", "# works\nIt works.\n"))
 
-    with pytest.raises(PlainSyntaxError) as exc_info:
-        parse(tmp_path)
+    with pytest.raises(MissingTestPlainFileError) as exc_info:
+        parse(tmp_path, require_test_plain_files=True)
 
-    assert str(exc_info.value) == (
-        "Plain syntax error: Test plain file 'tests/a.plain' binds to module 'tasks', which is not the entry "
-        "module or one of its required modules (todo)."
-    )
+    assert "todo:add-task" in str(exc_info.value)
 
 
 def test_unknown_func_id_is_rejected(tmp_path):

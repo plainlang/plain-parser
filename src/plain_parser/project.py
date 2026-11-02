@@ -62,8 +62,9 @@ def bind_test_plain_files(
 ) -> list[BoundTestPlainFile]:
     """Read every test plain file under the tests folders and add its scenarios to the functionality it binds to.
 
-    A `.plain` file under a tests folder without the `module:` and `func_id:` keys is an error, as is a file that binds to
-    a module outside the chain or to a func-id the module does not have. The concepts of the scenarios must be
+    A file whose `module:` names a module outside the chain is passed over, so that one tests folder can serve
+    several self-standing specs. A `.plain` file under a tests folder without the `module:` and `func_id:` keys is
+    an error, as is a file that binds to a func-id the module does not have. The concepts of the scenarios must be
     visible to the bound module. Files bound to one functionality are merged in discovery order; a scenario-id is
     unique across that merged set.
     """
@@ -84,12 +85,14 @@ def bind_test_plain_files(
                 f"frontmatter needs the keys `module:` and `func_id:`."
             )
 
+        if metadata[test_plain_file.MODULE_KEY] not in trees:
+            # The file belongs to a module this render does not build. One tests folder may serve
+            # several self-standing specs, so such a file is passed over, not read. A module name
+            # that is a typo binds the file to nothing, and the functionality it was written for
+            # then has no test plain file, which check_test_plain_files reports.
+            continue
+
         parsed = test_plain_file.parse_test_plain_file_source(text, name, template_dirs, {})
-        if parsed.module not in trees:
-            raise PlainSyntaxError(
-                f"Plain syntax error: Test plain file '{name}' binds to module '{parsed.module}', which is not the "
-                f"entry module or one of its required modules ({', '.join(trees)})."
-            )
         tree = trees[parsed.module]
         functionalities = tree.get(plain_spec.FUNCTIONAL_REQUIREMENTS) or []
         functionality = next((item for item in functionalities if item["id"] == parsed.func_id), None)
