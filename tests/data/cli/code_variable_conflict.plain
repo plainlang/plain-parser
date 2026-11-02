@@ -4,6 +4,8 @@
 
 ***functional specs***
 
-- Implement {% include "code_variable_template.plain", variable_name: "first" %}
+# implement-first
+Implement {% include "code_variable_template.plain", variable_name: "first" %}
 
-- Implement {% include "code_variable_template.plain", variable_name: "second" %}
+# implement-second
+Implement {% include "code_variable_template.plain", variable_name: "second" %}

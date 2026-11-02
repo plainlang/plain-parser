@@ -72,7 +72,7 @@ def write_module(directory, module_name, exported_concepts, required_modules, de
         "***definitions***\n\n"
         + "".join(f"- {definition}\n\n" for definition in definitions)
         + "***implementation reqs***\n\n- An implementation requirement.\n"
-        + (f"\n***functional specs***\n\n- {functional_spec}\n" if functional_spec is not None else "")
+        + (f"\n***functional specs***\n\n# main\n{functional_spec}\n" if functional_spec is not None else "")
     )
 
 
@@ -296,7 +296,7 @@ def test_top_module_shape_is_checked_before_required_modules_are_validated(tmp_p
 
 def test_parse_errors_of_required_modules_come_before_top_module_concept_errors(tmp_path):
     (tmp_path / "Base.plain").write_text(
-        "***implementation reqs***\n\n- {% if %}\n\n***functional specs***\n\n- Base works.\n"
+        "***implementation reqs***\n\n- {% if %}\n\n***functional specs***\n\n# main\nBase works.\n"
     )
     write_module(tmp_path, "Top", [], ["Base"], [], "Top uses :TopMissing:.")
 

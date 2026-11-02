@@ -37,3 +37,9 @@ class ImportedModuleWithFunctionalitiesError(Exception):
     """
 
     pass
+
+
+class MissingTestPlainFileError(Exception):
+    """Raised when conformance tests are enabled and a functionality has no test plain file bound to it."""
+
+    pass

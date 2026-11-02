@@ -117,15 +117,6 @@ def validate_concepts(marshalled_plain_source) -> list[str]:
     ]:
         errors.extend(validate_concepts_in_spec_group(spec_group, marshalled_plain_source, tmp_tree_based_concepts))
 
-    if plain_spec.FUNCTIONAL_REQUIREMENTS in marshalled_plain_source:
-        for func_spec in marshalled_plain_source[plain_spec.FUNCTIONAL_REQUIREMENTS]:
-            if "acceptance_tests" not in func_spec:
-                continue
-
-            acceptance_tests = func_spec["acceptance_tests"]
-            for spec in acceptance_tests:
-                errors.extend(validate_concepts_in_spec(spec, tmp_tree_based_concepts, plain_spec.ACCEPTANCE_TESTS))
-
     return errors
 
 
