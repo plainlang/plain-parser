@@ -116,12 +116,49 @@ jobs:
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # release/v1
 
+  # Stable releases only; pre-releases stay out of the Linear pipeline.
+  linear-release:
+    name: Record release in Linear
+    needs: publish-to-pypi
+    if: ${{ !github.event.release.prerelease }}
+    runs-on: ubuntu-latest
+    # pull-requests lets the step look up each commit's PR.
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      # The notify job links the release, or says recording it failed.
+      release-url: ${{ steps.linear.outputs.release-url }}
+      outcome: ${{ steps.linear.outcome }}
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The release gets the PRs merged since the previous one, and the GitHub
+      # release text as notes; a re-run updates it. Log-only until
+      # LINEAR_RELEASE_MODE is "live". Non-fatal: the release is already out.
+      - name: Record release in Linear
+        id: linear
+        continue-on-error: true
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          LINEAR_ACCESS_KEY: ${{ secrets.LINEAR_ACCESS_KEY }}
+          LINEAR_RELEASE_MODE: ${{ vars.LINEAR_RELEASE_MODE }}
+          RELEASE_VERSION: ${{ github.event.release.tag_name }}
+          RELEASE_SHA: ${{ github.sha }}
+          RELEASE_NOTES: github-release
+        with:
+          script: return require('./.github/scripts/record-linear-release.cjs')({ github, context, core })
+
   # End-of-run notices run in their own job: a failed Slack post fails only this
   # job, not the publish or its GitHub deployment, and "Re-run failed jobs"
   # re-posts without publishing again.
   notify:
     name: Notify Slack
-    needs: [pre-publish-checks, build, upload-release-assets, publish-to-pypi]
+    # linear-release is skipped for pre-releases and failed publishes; this job still runs.
+    needs: [pre-publish-checks, build, upload-release-assets, publish-to-pypi, linear-release]
     if: ${{ !cancelled() && vars.SLACK_CHANNEL_ID != '' }}
     runs-on: ubuntu-latest
 
@@ -219,6 +256,9 @@ jobs:
 
       - name: Notify Slack (release published)
         if: ${{ needs.publish-to-pypi.result == 'success' && !github.event.release.prerelease }}
+        env:
+          # Empty while the release step only logs, or when it failed.
+          RELEASE_URL: ${{ needs.linear-release.outputs.release-url }}
         uses: slackapi/slack-github-action@dcb1066f776dd043e64d0e8ba94ca15cc7e1875d # v4.0.0
         with:
           method: chat.postMessage
@@ -229,7 +269,7 @@ jobs:
             thread_ts: ${{ env.THREAD_TS }}
             text: >-
               *plain-parser*: `${{ github.ref_name }}` published to PyPI :white_check_mark:.
-              Install with `pip install --upgrade plain-parser`.
+              Install with `pip install --upgrade plain-parser`.${{ env.RELEASE_URL != '' && format(' <{0}|View release>.', env.RELEASE_URL) || needs.linear-release.outputs.outcome == 'failure' && ' Recording it in Linear failed :warning:.' || '' }}
 
       # Success also puts a ✅ on the start notice, so the result shows in the
       # channel without another message. Needs the app's reactions:write scope.
