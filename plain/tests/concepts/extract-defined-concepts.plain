@@ -1,0 +1,20 @@
+---
+module: concepts
+func_id: extract-defined-concepts
+---
+
+***conformance tests***
+
+# one-concept
+The text `- ⟨Task⟩ is a thing to do.` defines [⟨Task⟩] with no error.
+
+# several-concepts
+The text `- ⟨A⟩, ⟨B⟩ are twins.` defines [⟨A⟩, ⟨B⟩] with no error.
+
+***acceptance tests***
+
+# invalid-name
+The text `- ⟨Bad name⟩ is x.` defines nothing and gives the error `Syntax error: Invalid concept: ⟨Bad name⟩. Should contain only letters, numbers, hyphens and dots.`.
+
+# no-concept
+The text `- A plain sentence.` defines nothing and gives one error starting with `Syntax error: Invalid definition specification text: - A plain sentence.`.

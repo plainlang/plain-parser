@@ -1,0 +1,20 @@
+---
+module: cycle_graph
+func_id: limit-cycle-search
+---
+
+***conformance tests***
+
+# limit-stops-the-search
+The complete :Graph: on the nodes a, b, c, d yields 10 cycles with a limit of 10, and none with a limit of 0.
+
+# limit-is-lazy
+The complete :Graph: on the integer nodes 0 to 13 yields 11 cycles with a limit of 11, within the test timeout.
+
+# acyclic-appendage-is-not-searched
+A :Graph: with the cycle a→[b, d0], b→[a] and a chain of 40 diamonds hanging off d0 (each di→[li, ri], li→[d(i+1)], ri→[d(i+1)], d40→[]) yields exactly one cycle, the nodes a and b.
+
+# cycle-longer-than-the-recursion-limit
+The :Graph: of the ring 0→1→…→(n-1)→0 with n twice the Python recursion limit yields one cycle of n nodes.
+
+***acceptance tests***

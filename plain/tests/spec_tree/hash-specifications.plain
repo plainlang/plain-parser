@@ -1,0 +1,14 @@
+---
+module: spec_tree
+func_id: hash-specifications
+---
+
+***conformance tests***
+
+# hash-text
+The hash of the text `abc` is `ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad`.
+
+# hash-specifications-value
+The hash of the specifications value {`a`: [1]} equals the hash of its JSON text with an indent of 4.
+
+***acceptance tests***

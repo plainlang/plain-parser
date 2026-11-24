@@ -1,0 +1,41 @@
+---
+module: plain_parser
+func_id: parse-command
+---
+
+***conformance tests***
+
+# valid-module
+`plain-parser parse valid.plain` exits with code 0, writes nothing on standard error, and prints one JSON document followed by exactly one newline, with the keys `format_version` 2, `modules` [{`module` `valid`, `tree` equal to the last tree of its :RequiresChain:}], `resources` {} and `test_plain_files` {}.
+
+# chain-deepest-first
+`parse chain_top.plain` prints the modules `chain_base`, `chain_middle`, `chain_top` with their trees as listed by the requires chain; `parse chain_fork_top.plain` prints `chain_base`, `chain_middle`, `chain_fork_top`.
+
+# test-plain-files-and-scenarios
+In the project, `parse todo.plain` prints `test_plain_files` {`tests/todo/add-task.plain`: {module `todo`, func_id `add-task`}, `tests/todo/list-tasks.plain`: {module `todo`, func_id `list-tasks`}}, the conformance scenarios `add-first-task` and `add-without-name` and the acceptance scenario `add-then-list` under `add-task`, and the text of the `list-tasks` scenario.
+
+# template-dir-from-config
+With `template-dir: template` in the config file, `parse project/top.plain` writes nothing on standard error and prints the modules `helper`, `top`.
+
+# binary-resource-is-not-read
+`parse binary_resource.plain` and `parse requires_binary_resource_top.plain` exit with code 0 and print the resources {`binary.bin`: `binary.bin`}, while `check` of each fails with `'binary.bin'` and `is a binary file`.
+
+# stdout-without-byte-buffer
+Running the command in process with standard output redirected to a text buffer returns 0, and the buffer holds the JSON document with the module `valid`.
+
+***acceptance tests***
+
+# invalid-module
+`parse undefined_concept.plain` exits with code 1, writes nothing on standard error, and prints exactly the keys `format_version` 2, `type` `PlainSyntaxError` and `message`, where `check` writes `Error: ` followed by that message and a newline.
+
+# diverging-requires
+`parse diamond_requires_main.plain` exits with code 1 with the type `PlainSyntaxError`.
+
+# missing-test-plain-file
+In the project without `list-tasks.plain`, `parse` exits with code 1 with the type `MissingTestPlainFileError` and a message holding `add-test-scenarios`.
+
+# missing-or-non-plain-entry
+`parse does_not_exist.plain` and `parse not_plain.md` each exit with code 1, write nothing on standard error, and print exactly the keys `format_version`, `type` and `message`.
+
+# interrupted
+When the parse or the config lookup is interrupted, `parse` returns 130 and prints nothing on standard output.

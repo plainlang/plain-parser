@@ -1,0 +1,19 @@
+---
+module: spec_module
+func_id: record-code-variables
+---
+
+***conformance tests***
+
+# functionality-code-variable
+The module `code_variables` with the functionality `implement` whose body is `Implement` followed by an include of `implement.plain` with `variable_name: "nice"`, where `implement.plain` holds `something nice and useful`, `  - the nice thing should be really {% raw %}{{ variable_name | code_variable }}{% endraw %}`, `  - the useful thing should be really useful`, gives the functionality markdown with the placeholder of `variable_name` in place of the value and code_variables [{name `variable_name`, value `nice`}].
+- The definitions are [{markdown `- ⟨concept⟩ is a concept.`}].
+
+# list-items-and-first-argument-name
+The module `template_include` includes `header.plain` with `variable_name_1: "nice_1", variable_name_2: "nice_2"`; its two implementation reqs use `variable_name_1` and `variable_name_2` with the `code_variable` filter.
+- Both items get the placeholder of `variable_name_1`, with code_variables [{name `variable_name_1`, value `nice_1`}] and [{name `variable_name_1`, value `nice_2`}].
+
+# same-include-two-values
+A module including one template with `variable_name: "first"` in one functionality and `variable_name: "second"` in another parses, each functionality recording its own value.
+
+***acceptance tests***

@@ -1,0 +1,34 @@
+---
+module: spec_module
+func_id: read-list-sections
+---
+
+***conformance tests***
+
+# regular-module
+Parsing the module `regular_plain_source.plain`:
+```
+***definitions***
+
+***implementation reqs***
+
+- First implementation requirement.
+- Second implementation requirement.
+
+***functional specs***
+
+# display-hello-world
+Display "hello, world"
+```
+gives the tree {`definitions`: [], `implementation reqs`: [{markdown `- First implementation requirement.`}, {markdown `- Second implementation requirement.`}], `functional specs`: [{id `display-hello-world`, markdown `Display "hello, world"`, linked_resources [], conformance_tests [], acceptance_tests []}]}.
+
+# comment-lines-are-dropped
+The same module with a comment line `> First implementation requirement is a comment.` in place of the first item, and another comment line before `***definitions***`, gives `implementation reqs` [{markdown `- Second implementation requirement.`}].
+
+# indented-comment-lines-are-dropped
+The regular module with indented comment lines `  > a comment` between the items gives the same tree as without them.
+
+***acceptance tests***
+
+# invalid-frontmatter
+Parsing a text whose frontmatter is `module: [` raises `PlainSyntaxError` whose message starts with `Plain syntax error: Invalid frontmatter: `.

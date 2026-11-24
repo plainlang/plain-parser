@@ -1,0 +1,50 @@
+---
+description: The requires chain of a module, its exported concepts, the chain order, and the order in which errors are found.
+import:
+  - plain_parser_base
+requires:
+  - spec_module
+---
+
+***definitions***
+
+- :ChainParser: is the requires-chain part of the `plain_parser.plain_file` module of :PythonApi:.
+
+- :ExportedDefinitions: of a :Module: are the definition items of the concepts in its `exported_concepts`, each followed by the definition items of the concepts it mentions, recursively, :PredefinedConcepts: left out.
+
+***test reqs***
+
+- :ConformanceTests: build each module X named by a single capitalized word so that it exports and defines the concept XConcept, has one implementation req, and has the functionality `main` that mentions the exported concept of every module X requires, unless a scenario says otherwise.
+
+***functional specs***
+
+# walk-requires
+:ChainParser: parses every module reached through the `requires` lists of a :Module:, depth first, each list in order and each module's own list before the module is recorded.
+- Each required module is parsed with its own empty code-variable mapping and no shared imports.
+- A listed module equal to the most recently recorded module is not parsed again; its :ExportedDefinitions: stay visible to the listing module.
+- Any other listed module is parsed; when it has no `requires` list and a module was already recorded, the walk raises `Plain syntax error: There must be a fixed order how required modules are dependent ({module}).`.
+- So two branches that meet at a shared module, two independent branches, a module listed again after its dependent, and an ancestor listed after its dependent are all rejected, while listing an ancestor before its dependent, or a module twice in a row, is accepted.
+- A module reached again while walking its own `requires` raises `Plain syntax error: Circular required module detected: {module}.`.
+- A listed module that does not exist raises `ModuleDoesNotExistError`.
+
+# share-exported-concepts
+A module sees the :ExportedDefinitions: of each module its own `requires` list names, merged into its definitions after its own and imported ones.
+- A merged item whose rendered text equals one already present is left out.
+- Exports are not transitive: a module sees the exports of an ancestor only when it lists that ancestor in its own `requires`.
+- A module that redefines a concept exported to it raises `Concepts were defined multiple times: {concept}`.
+- A module may export nothing; a module that uses a concept its required module defines but does not export raises `is not defined`.
+
+# list-requires-chain
+:ChainParser: parses an entry :Module: file name over :TemplateDirs: into its :RequiresChain:.
+- A module without `requires` gives a chain of itself alone.
+- A module reached through several `requires` paths appears once, at its deepest position.
+- Every module in the chain has a validated :PlainSourceTree:, as for a single module, with its `functional specs`.
+- Errors of any module in the chain propagate.
+
+# order-chain-errors
+:ChainParser: checks a chain in a fixed order and raises the first error found.
+- First the shape of the entry :Module: is checked, before its `requires` list is read.
+- Then every required module is parsed, so a parse error in a required module, such as invalid Liquid, comes before a concept error of the entry module.
+- Then the entry module's tree is built and its concepts and links are validated.
+- Last, each required module is validated once, its shape first and then its tree: in the order of the entry module's `requires` list, each followed by the modules of its own `requires` list, depth first.
+- Parsing only the entry module, which returns its name, tree and `requires` list, validates the whole chain the same way.

@@ -1,0 +1,17 @@
+---
+module: spec_module
+func_id: read-module-file
+---
+
+***conformance tests***
+
+# first-directory-wins
+With `m.plain` in two template directories, parsing `m.plain` reads the one in the first directory.
+
+***acceptance tests***
+
+# missing-module
+Parsing `does_not_exist.plain` raises `ModuleDoesNotExistError` with `Module does not exist (does_not_exist).`.
+
+# base64-in-module
+Parsing a module whose functionality body holds 8292 `A` characters in a row raises `UnsupportedBase64Content` whose message holds `contains a base64-encoded blob (8292 characters)`.

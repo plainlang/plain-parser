@@ -1,0 +1,18 @@
+---
+module: test_plain_file
+func_id: resolve-scenario-links
+---
+
+***conformance tests***
+
+> A resolved link is checked by read-scenarios.
+
+> add conformance test scenarios here
+
+***acceptance tests***
+
+# missing-link
+The file `missing_link.plain` whose scenario `works` links `missing.md`, which does not exist, raises `PlainSyntaxError` whose message starts with `Plain syntax error: Link missing.md in test plain file 'missing_link.plain', scenario `works` does not exist. Linked resources are looked up relative to the following directories`.
+
+# link-to-plain-file
+The file `link_to_plain_file.plain` whose scenario links `valid.plain` raises `PlainSyntaxError` holding `Referenced resource 'valid.plain' in test plain file`.

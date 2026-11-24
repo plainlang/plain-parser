@@ -1,0 +1,23 @@
+---
+module: spec_tree
+func_id: select-func-id-range
+---
+
+***conformance tests***
+
+# start-and-end-inclusive
+In a tree with f1, f2, f3, f4 the range from f2 to f3 is [f2, f3].
+
+# without-end
+In a tree with f1, f2, f3, f4 the range from f3 is [f3, f4].
+
+***acceptance tests***
+
+# unknown-start
+The range from f9 in a tree with f1, f2, f3, f4 raises `InvalidFridArgument` with a message containing `Invalid start functionality ID: f9`.
+
+# unknown-end
+The range from f1 to f9 raises `InvalidFridArgument` with a message containing `Invalid end functionality ID: f9`.
+
+# start-after-end
+The range from f3 to f2 raises `InvalidFridArgument` with a message containing `must be before`.

@@ -1,0 +1,73 @@
+---
+description: Parsing of one test plain file into its conformance and acceptance scenarios.
+import:
+  - plain_parser_base
+requires:
+  - requires_chain
+---
+
+***definitions***
+
+- :TestFileParser: is the `plain_parser.test_plain_file` module of :PythonApi:.
+
+- :ScenarioRecord: is the parsed form of one :Scenario:: its :ScenarioId:, the line number of its heading, its text, its links and its code variables.
+
+- :ParsedTestFile: is the parsed form of one :TestPlainFile:: the name it is shown by in messages, the module and func-id it binds to, and the :ScenarioRecord: lists of its conformance and acceptance sections.
+
+***implementation reqs***
+
+- :TestFileParser: reads scenarios line by line from the rendered text, not with a markdown parser; only links are found by parsing the scenario text with mistletoe.
+
+***test reqs***
+
+- :ConformanceTests: of code fences build each file as `---`, `module: todo`, `func_id: add-task`, `---`, an empty line, `***conformance tests***`, an empty line, the scenario, an empty line and `***acceptance tests***`, named `add-task.plain`.
+
+- :ConformanceTests: of invalid test plain files start each file with the frontmatter `module: task-manager` and `func_id: add-task` on lines 1 to 4 and an empty line 5, and name it as the scenario's expected message does.
+
+***functional specs***
+
+# recognize-test-plain-file
+:TestFileParser: tells whether a :Frontmatter: mapping makes its file a :TestPlainFile:: it does when it has both keys `module` and `func_id`.
+
+# read-test-frontmatter
+:TestFileParser: reads the :Frontmatter: of a :TestPlainFile: text, given with the name it is shown by.
+- Invalid YAML raises `Test plain file '{name}' has invalid frontmatter: {error}`.
+- A missing `module` or `func_id` key raises `has no `{key}:` key in its frontmatter`, `module` checked first.
+- A value that is not a non-empty string raises `the frontmatter key `{key}:` must be a non-empty string`.
+- Any other key raises `has the frontmatter key `{key}:`; only `module:` and `func_id:` are allowed`.
+- All messages are the `PlainSyntaxError` texts of :ErrorMessages:.
+
+# read-scenarios
+:TestFileParser: parses a :TestPlainFile: text into a :ParsedTestFile: whose scenarios are in file order.
+- Line endings are normalized and Liquid is rendered as for a :Module:, over :TemplateDirs:, before the lines are read; line numbers count from the first line of the file.
+- A line that starts with three asterisks is a section line; the sections are `conformance tests` then `acceptance tests`, both required, either may be empty, and they may be on adjacent lines.
+- A line that starts with `# `, or is only `#`, is a scenario heading; the rest of the line, stripped, is the :ScenarioId:.
+- Every :CommentLine: is dropped, before the first section too.
+- The scenario text is every other line up to the next heading or section line, as written, without leading and trailing blank lines.
+- A :ScenarioRecord: as a mapping is `{"id", "text", "linked_resources"}`, plus `code_variables` when it has any.
+
+# reject-invalid-scenarios
+:TestFileParser: rejects an invalid :TestPlainFile: with the `PlainSyntaxError` texts of :ErrorMessages:, naming the line and the file.
+- An unknown section line, a repeated section, and `acceptance tests` before `conformance tests` are rejected.
+- A missing section is rejected after the whole file is read.
+- A scenario heading or another non-blank line before the first section is rejected.
+- A non-blank line in a section before its first heading is rejected.
+- A heading whose id is not a :ScenarioId: is rejected; so is an id used twice in one file, naming the line of the first use.
+- A scenario without text is rejected at its heading line.
+
+# keep-code-fences
+:TestFileParser: keeps every line inside a fenced code block as scenario text.
+- A fence opens at a line whose text, after leading spaces, starts with three backticks or three tildes, and closes at the next such line with the same marker; a line with the other marker inside is text.
+- Inside a fence, a `# ` line is not a heading, a three-asterisk line is not a section line, and a `>` line is not a comment.
+- A fence still open when its scenario ends raises `Scenario `{id}` has a code fence that is not closed.` at the heading line.
+- A fence before the first heading of a section is content before a heading.
+
+# resolve-scenario-links
+:TestFileParser: records the links of each scenario text as its `linked_resources`, resolved over :TemplateDirs: with the checks of a :Module: link.
+- Error messages add ` in test plain file '{name}', scenario `{id}`` after the target, or after `Link` and before `must have text`.
+- Code-variable tokens in a scenario text are replaced with placeholders and recorded in the scenario's `code_variables`, as for a :Module:.
+
+# check-scenario-concepts
+:TestFileParser: checks the concepts a :ParsedTestFile: mentions against a given set of visible concepts.
+- It returns one error per scenario and distinct concept that is neither visible nor one of :PredefinedConcepts:, in scenario order, as `Syntax error at line {line} in test plain file '{name}': Concept {concept} used in scenario `{id}` is not defined in module '{module}'.`, the line being the heading line.
+- It returns an empty list when every concept is visible.

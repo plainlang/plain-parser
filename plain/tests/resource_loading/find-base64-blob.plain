@@ -1,0 +1,17 @@
+---
+module: resource_loading
+func_id: find-base64-blob
+---
+
+***conformance tests***
+
+# long-run-is-a-blob
+The text `curl -d 'img=` followed by 8292 `A` characters and `'` holds a :Base64Blob: of 8292 characters.
+
+# short-run-is-not-a-blob
+The text `token=` followed by 8092 `A` characters holds no :Base64Blob:.
+
+# data-uri-header-is-included
+The text `x data:image/png;base64,` followed by 8192 `A` characters and `==` holds a :Base64Blob: of 8216 characters, starting with `data:image/png;base64,`.
+
+***acceptance tests***

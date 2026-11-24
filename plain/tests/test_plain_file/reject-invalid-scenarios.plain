@@ -1,0 +1,43 @@
+---
+module: test_plain_file
+func_id: reject-invalid-scenarios
+---
+
+***conformance tests***
+
+> add conformance test scenarios here
+
+***acceptance tests***
+
+# missing-acceptance-section
+A file with only the conformance section raises exactly `Plain syntax error: Test plain file 'missing_acceptance_section.plain' has no `***acceptance tests***` section.`.
+
+# sections-out-of-order
+A file whose `***acceptance tests***` line is line 6 raises exactly `Plain syntax error: Syntax error at line 6 in test plain file 'sections_out_of_order.plain': The `***acceptance tests***` section must come after `***conformance tests***`.`.
+
+# duplicate-section
+A file with a second `***conformance tests***` line on line 11 raises exactly `Plain syntax error: Syntax error at line 11 in test plain file 'duplicate_section.plain': Duplicate section `***conformance tests***`.`.
+
+# unknown-section
+A file with `***definitions***` on line 11 raises exactly `Plain syntax error: Syntax error at line 11 in test plain file 'unknown_section.plain': Invalid section (`***definitions***`). A test plain file has the sections `***conformance tests***` and `***acceptance tests***`, in this order.`.
+
+# duplicate-scenario-id
+A file with `# works` on lines 8 and 13 raises exactly `Plain syntax error: Syntax error at line 13 in test plain file 'duplicate_scenario_id.plain': Duplicate scenario-id `works`; it is first used at line 8.`.
+
+# invalid-scenario-id
+A file with `# Works Well` on line 8 raises exactly `Plain syntax error: Syntax error at line 8 in test plain file 'invalid_scenario_id.plain': Invalid scenario-id (`Works Well`). A scenario-id is lowercase letters and digits, with single hyphens between them.`.
+
+# scenario-id-shapes
+Each of the headings `# -works`, `# works-`, `# works--well`, `# -`, `# --`, `# works_well`, `# Works` raises `PlainSyntaxError` holding `Invalid scenario-id (` followed by the id in backticks and `)`.
+
+# content-before-section
+A file with `It works.` on line 6 raises exactly `Plain syntax error: Syntax error at line 6 in test plain file 'content_before_section.plain': Content before the first section (`It works.`); a test plain file starts with `***conformance tests***`.`.
+
+# content-before-scenario
+A file with `***conformance tests***` on line 6 and `It works.` on line 8 raises exactly `Plain syntax error: Syntax error at line 8 in test plain file 'content_before_scenario.plain': Content before the first `# <scenario-id>` heading in the `conformance tests` section (`It works.`).`.
+
+# scenario-before-section
+A file with `# works` on line 6 raises exactly `Plain syntax error: Syntax error at line 6 in test plain file 'scenario_before_section.plain': Scenario `works` comes before the first section; a test plain file starts with `***conformance tests***`.`.
+
+# empty-scenario
+A file with `# works` on line 8 followed by `***acceptance tests***` raises exactly `Plain syntax error: Syntax error at line 8 in test plain file 'empty_scenario.plain': Scenario `works` has no text.`.

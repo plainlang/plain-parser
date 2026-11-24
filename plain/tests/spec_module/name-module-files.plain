@@ -1,0 +1,11 @@
+---
+module: spec_module
+func_id: name-module-files
+---
+
+***conformance tests***
+
+# file-name-of-module
+The file name of the module `sub/todo` is `sub/todo.plain`, and the module name of `sub/todo.plain` is `sub/todo`.
+
+***acceptance tests***

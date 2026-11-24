@@ -1,0 +1,33 @@
+---
+module: spec_module
+func_id: read-functionalities
+---
+
+***conformance tests***
+
+# heading-and-body
+A module with a definition of Task and an implementation req, whose `functional specs` are:
+```
+# add-task
+A ⟨Task⟩ can be added.
+It gets an id.
+  - Only a ⟨Task⟩ with a name is added.
+    - The name is trimmed.
+
+# list-tasks
+> A comment between the heading and the body.
+
+Every ⟨Task⟩ is listed.
+```
+gives two functionalities: `add-task` with the markdown of its four body lines joined by newlines, as written, and `list-tasks` with the markdown `Every ⟨Task⟩ is listed.`, each with empty linked_resources, conformance_tests and acceptance_tests.
+
+# body-starts-with-a-list
+The functionality `add-task` whose body is the single line `  - A ⟨Task⟩ can be added.` has exactly that markdown.
+
+# flush-left-list-is-body
+The functionality `add-task` whose body is `A ⟨Task⟩ can be added.`, an empty line, `- A ⟨Task⟩ has a name.` and `    - Deeper, four spaces in.` has exactly those lines, the empty line kept, as markdown.
+
+# any-block-is-body
+The functionality `add-task` whose body is a paragraph, a fenced code block holding `todo add`, and the table `| id | name |`, `|---|---|`, `| 1 | Buy milk |`, followed by `# list-tasks`, has the markdown of the paragraph, an empty line, the code block, an empty line, and the table `| id  | name     |`, `| --- | -------- |`, `| 1   | Buy milk |`; `list-tasks` has its own body.
+
+***acceptance tests***

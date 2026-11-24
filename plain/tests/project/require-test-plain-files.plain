@@ -1,0 +1,23 @@
+---
+module: project
+func_id: require-test-plain-files
+---
+
+***conformance tests***
+
+# empty-sections-satisfy-the-check
+With `tests/a.plain` bound to `todo:add-task` with one scenario, and `tests/b.plain` bound to `todo:list-tasks` either as the frontmatter followed by the two section lines on adjacent lines or with the placeholder comment in its conformance section, the check passes and `list-tasks` has conformance_tests [].
+
+# check-off-by-default
+With only `todo:add-task` bound, parsing without the check succeeds.
+
+***acceptance tests***
+
+# missing-file
+With only `todo:add-task` bound, parsing with the check raises exactly `Functionality todo:list-tasks has no test plain file. Add one, by convention tests/todo/list-tasks.plain, with the add-test-scenarios skill.`.
+
+# misspelled-module
+With `tests/a.plain` bound to `tasks:add-task`, parsing with the check raises `MissingTestPlainFileError` holding `todo:add-task`.
+
+# required-modules-first
+`todo.plain` requires `core.plain` with the functionality `store-task`, and no file is bound; parsing with the check raises `MissingTestPlainFileError` holding `Functionality core:store-task has no test plain file`.

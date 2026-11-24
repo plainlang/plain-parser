@@ -1,0 +1,57 @@
+---
+description: Concept extraction, concept validation, and dependency ordering of definitions with cycle reports.
+import:
+  - plain_parser_base
+requires:
+  - resource_loading
+---
+
+***definitions***
+
+- :ConceptTools: is the `plain_parser.concept_utils` module of :PythonApi:.
+
+- :DefinitionItem: is one entry `{"markdown": ...}` of the `definitions` list of a :PlainSourceTree:, holding the text of one :Definition:.
+
+- :ConceptGraph: is the graph whose nodes are concepts and which has an edge from concept A to concept B when the :DefinitionItem: of B mentions A, predefined concepts and self-mentions left out.
+
+***implementation reqs***
+
+- :ConceptTools: orders definitions with `graphlib.TopologicalSorter`: for each concept in :ConceptGraph: insertion order, the concept is added, then each concept defined in terms of it is added with it as predecessor; `static_order()` gives the concept order.
+
+- :ConceptGraph: is built in :DefinitionItem: order: the concepts a definition defines are added first, then the concepts it mentions, each once.
+
+- A :DefinitionItem: takes the position of the last concept it defines in the concept order; items are sorted in place by that position.
+
+- :ConceptTools: lists cycles with `simple_cycles` of `plain_parser.graph` over :ConceptGraph:, keyed in definition order, with a limit of one more than the number reported.
+
+***functional specs***
+
+# extract-defined-concepts
+:ConceptTools: extracts the concepts a :Definition: text defines and the errors found.
+- The first `- ` followed by one or more comma-separated colon-wrapped names is read; each name that is a :ConceptToken: is a defined concept, in order.
+- A name with another character gives `Syntax error: Invalid concept: {candidate}. Should contain only letters, numbers, hyphens and dots.`.
+- A text without such a start gives no concept and the error `Syntax error: Invalid definition specification text: {text}. ...` of :ErrorMessages:.
+
+# extract-used-concepts
+:ConceptTools: extracts every :ConceptToken: a text mentions, in order, repeats kept.
+
+# validate-concepts
+:ConceptTools: validates the concepts of a :PlainSourceTree: and returns a list of error texts, empty when the tree is valid.
+- First come the errors of every :DefinitionItem:, as extracted.
+- A concept defined twice, or a predefined concept defined, gives one error `Syntax error: Concepts were defined multiple times: {concepts} .` naming them.
+- Then each item of `implementation reqs`, `test reqs`, `functional specs` and `definitions`, in that order, gives `Syntax error: Concept {concept} is not defined in the definitions. {section}: {markdown}` for each mention of a concept that is neither defined in the tree nor one of :PredefinedConcepts:.
+
+# sort-definitions
+:ConceptTools: sorts a list of :DefinitionItem: entries in place so that every concept comes after the concepts its definition mentions.
+- A list of zero or one item is left as is.
+- Items without mentions keep their file order relative to each other.
+- A definition of several concepts moves as one item.
+- Mentions in nested sub-items count; self-mentions and :PredefinedConcepts: do not.
+
+# report-concept-cycles
+When :ConceptGraph: has a cycle, sorting raises `PlainSyntaxError` listing the elementary cycles, in the format of :ErrorMessages:.
+- Each cycle is written `Cycle N: A -> B -> ... -> A`, where each concept is followed by a concept its definition mentions, starting at the earliest-defined concept of the cycle.
+- Under each cycle line come the texts of the definitions on the cycle, in cycle order; a text that defines two concepts of the cycle is written once.
+- Cycles are ordered by the definition position of their first concept, then by length.
+- At most 10 cycles are listed; with more, the head says `Found more than 10 cycles` and `Showing the first 10.`, and the listed cycles are the ones whose concepts are defined earliest.
+- A cycle is reported even when a definition on it also mentions an undefined concept.

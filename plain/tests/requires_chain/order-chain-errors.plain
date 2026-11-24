@@ -1,0 +1,34 @@
+---
+module: requires_chain
+func_id: order-chain-errors
+---
+
+***conformance tests***
+
+> add conformance test scenarios here
+
+***acceptance tests***
+
+# listed-order-decides
+Base mentions the undefined BaseMissing, Middle requires [Base] and mentions the undefined MiddleMissing, Top requires [Base, Middle]; listing the chain of Top raises `PlainSyntaxError` holding `Concept ⟨BaseMissing⟩ is not defined`.
+
+# top-shape-before-requires
+Top without `functional specs` requires the missing module Missing; parsing Top raises `MissingFunctionalitiesError`.
+
+# top-shape-before-required-validation
+Top without `functional specs` requires Base, whose functionality mentions the undefined BaseMissing; parsing Top raises `MissingFunctionalitiesError`.
+
+# required-parse-error-before-top-concept-error
+Base has the implementation req `- {% raw %}{% if %}{% endraw %}`; Top requires Base and mentions the undefined TopMissing; parsing Top raises `PlainSyntaxError` holding `Invalid Liquid`.
+
+# top-concept-error-before-required-concept-error
+Base mentions the undefined BaseMissing; Top requires Base and mentions the undefined TopMissing; parsing Top raises `PlainSyntaxError` holding `Concept ⟨TopMissing⟩ is not defined`.
+
+# top-concept-error-before-required-shape-error
+Base has no `functional specs`; Top requires Base and mentions the undefined TopMissing; parsing Top raises `PlainSyntaxError` holding `Concept ⟨TopMissing⟩ is not defined`.
+
+# required-modules-top-down
+Base mentions BaseMissing, Middle requires Base and mentions MiddleMissing, Top requires Middle; parsing Top raises `PlainSyntaxError` holding `Concept ⟨MiddleMissing⟩ is not defined`.
+
+# required-module-without-functional-specs
+Base has no `functional specs`; Top requires Base; parsing Top raises `MissingFunctionalitiesError` holding `Module 'Base'`.

@@ -1,0 +1,14 @@
+---
+module: plain_parser
+func_id: export-package-api
+---
+
+***conformance tests***
+
+# package-names
+The `plain_parser` package has every name of its `__all__` list in :PythonApi:, and `plain_parser.plain_file_parser` parses `valid.plain`.
+
+# console-script
+Running `plain-parser check valid.plain` as a process exits with code 0, writes standard output ending in `: OK` and a newline, and writes nothing on standard error.
+
+***acceptance tests***

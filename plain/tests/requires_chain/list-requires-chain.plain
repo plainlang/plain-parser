@@ -1,0 +1,23 @@
+---
+module: requires_chain
+func_id: list-requires-chain
+---
+
+***conformance tests***
+
+# chain-deepest-first
+`chain_top` requires `chain_middle`, which requires `chain_base`; the chain of `chain_top` is `chain_base`, `chain_middle`, `chain_top`, and each tree has `functional specs`.
+
+# single-module
+The chain of `chain_base` is `chain_base` alone.
+
+# shared-ancestor-once
+`chain_fork_top` requires [`chain_base`, `chain_middle`]; its chain is `chain_base`, `chain_middle`, `chain_fork_top`.
+
+# nested-walk-keeps-exports
+`shared_export_above` requires `shared_export_top`; its chain is `shared_export_base`, `shared_export_middle`, `shared_export_top`, `shared_export_above`.
+
+***acceptance tests***
+
+# invalid-ancestor
+`invalid_ancestor_top` requires `invalid_ancestor_base`, whose functionality mentions the undefined ⟨UndefinedThing⟩; parsing the top module alone raises an error holding `Concept ⟨UndefinedThing⟩ is not defined`.

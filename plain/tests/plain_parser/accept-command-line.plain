@@ -1,0 +1,19 @@
+---
+module: plain_parser
+func_id: accept-command-line
+---
+
+***conformance tests***
+
+> add conformance test scenarios here
+
+***acceptance tests***
+
+# check-without-file
+`plain-parser check` without a file exits with code 2 and writes `usage:` on standard error.
+
+# parse-without-file
+`plain-parser parse` without a file exits with code 2, writes `usage:` on standard error and nothing on standard output.
+
+# without-subcommand
+`plain-parser` without arguments exits with code 2.

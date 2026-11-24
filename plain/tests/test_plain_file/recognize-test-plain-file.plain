@@ -1,0 +1,11 @@
+---
+module: test_plain_file
+func_id: recognize-test-plain-file
+---
+
+***conformance tests***
+
+# binding-keys
+{`module`: `m`, `func_id`: `f`} makes a test plain file; {`module`: `m`}, {} and {`description`: `x`} do not.
+
+***acceptance tests***

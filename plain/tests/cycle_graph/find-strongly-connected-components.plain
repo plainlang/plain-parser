@@ -1,0 +1,17 @@
+---
+module: cycle_graph
+func_id: find-strongly-connected-components
+---
+
+***conformance tests***
+
+# components-of-mixed-graph
+The :Graph: a→[b], b→[a, c], c→[d], d→[c], e→[] has the components {a, b}, {c, d} and {e}.
+
+# successor-only-node-is-a-component
+The :Graph: a→[b] has the components {a} and {b}.
+
+# long-chain
+The :Graph: of a chain 0→1→…→n with n twice the Python recursion limit has n + 1 components.
+
+***acceptance tests***

@@ -1,0 +1,35 @@
+---
+module: resource_loading
+func_id: indent-included-templates
+---
+
+***conformance tests***
+
+# indented-includes
+With `implement.plain` holding the three lines `something nice and useful`, `    - the nice thing should be really nice`, `    - the useful thing should be really useful`, and `template.plain` holding `- This is a functionality inside a template.`, rendering:
+```
+- Implement {% raw %}{% include "implement.plain" %}{% endraw %}
+{% raw %}{% include "template.plain" %}{% endraw %}
+    {% raw %}{% include "template.plain" %}{% endraw %}
+    - Implement {% raw %}{% include "implement.plain" %}{% endraw %}
+```
+gives:
+```
+- Implement something nice and useful
+    - the nice thing should be really nice
+    - the useful thing should be really useful
+- This is a functionality inside a template.
+    - This is a functionality inside a template.
+    - Implement something nice and useful
+        - the nice thing should be really nice
+        - the useful thing should be really useful
+```
+- The loaded templates are exactly `implement.plain` and `template.plain` with their sources.
+
+# include-in-comment-is-kept
+Rendering the line `> This is a with an include tag {% raw %}{% include "template.plain" %}{% endraw %}` gives `> This is a with an include tag {% raw %}{% include 'template.plain' %}{% endraw %}`.
+
+# arguments-are-variables
+With `t.plain` holding `Hello {% raw %}{{ name }}{% endraw %}`, rendering `{% raw %}{% include 't.plain', name: 'Ann' %}{% endraw %}` gives `Hello Ann`.
+
+***acceptance tests***

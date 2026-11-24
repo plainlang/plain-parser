@@ -1,0 +1,24 @@
+---
+module: test_plain_file
+func_id: keep-code-fences
+---
+
+***conformance tests***
+
+# fenced-lines-are-text
+The scenario `add-first-task` with the text `The commands below add a task.`, an empty line, a fenced block, and `The task is listed.` keeps the whole text as written, and is the only scenario, for each of these fenced blocks:
+- a ```` ```bash ```` fence holding `# create an empty list, then add a task`, `# add-first-task` and `todo add "Buy milk"`;
+- a ```` ``` ```` fence holding `***`, `todo 1.0`, `***`;
+- a ```` ``` ```` fence holding `> todo add Buy milk`, `Added task 1: Buy milk`, `> todo list`;
+- a `  ~~~` fence holding `  # not a heading` and `  ` followed by three backticks.
+
+# heading-after-closed-fence
+The scenario `first` holding a fence around `# not a heading`, followed by an empty line and `# second` with `It works.`, gives the scenarios `first` and `second`.
+
+***acceptance tests***
+
+# fence-not-closed
+The scenario `first` on line 8 with `It works:`, a fence opening line and `todo add`, followed by `***acceptance tests***`, raises exactly `Plain syntax error: Syntax error at line 8 in test plain file 'add-task.plain': Scenario `first` has a code fence that is not closed.`.
+
+# fence-before-first-scenario
+A fence around `# not a heading` on line 8, before `# first`, raises `PlainSyntaxError` holding `Syntax error at line 8 in test plain file 'add-task.plain': Content before the first `# <scenario-id>` heading`.

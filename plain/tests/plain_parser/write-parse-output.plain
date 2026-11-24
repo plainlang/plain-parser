@@ -1,0 +1,26 @@
+---
+module: plain_parser
+func_id: write-parse-output
+---
+
+***conformance tests***
+
+# utf8-whatever-the-encoding
+A module whose functionality body ends with ` It greets “Zoë” with ✓.`, parsed in a process whose standard output encoding is ASCII, exits with code 0, writes nothing on standard error, and its standard output decoded as UTF-8 is JSON holding `“Zoë” with ✓`.
+
+# closed-pipe
+`parse valid.plain` in a process whose standard output is a pipe already closed by the reader exits with code 0 and writes nothing on standard error.
+
+# non-utf8-directory-stays-out
+A module in a directory whose name holds the byte 0xff, linking `notes.md` next to it, parsed from the parent directory, exits with code 0 and prints the resources {`notes.md`: `notes.md`}.
+
+***acceptance tests***
+
+# non-utf8-module-name
+A module file whose name is `bad` + byte 0xff + `name.plain`, parsed from its directory, exits with code 1, writes nothing on standard error, and prints the message `The parse result holds text that is not valid UTF-8: "module": "bad\udcffname"`.
+
+# non-utf8-path-in-error
+A module in a directory whose name holds the byte 0xff, linking the missing `missing.md`, prints the type `PlainSyntaxError` and a message holding `bad\udcffname`.
+
+# result-not-json
+When the parse result holds a value JSON cannot represent, `parse` exits with code 1, writes nothing on standard error, and prints the type `TypeError`.

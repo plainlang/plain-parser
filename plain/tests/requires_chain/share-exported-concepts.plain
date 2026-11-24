@@ -1,0 +1,32 @@
+---
+module: requires_chain
+func_id: share-exported-concepts
+---
+
+***conformance tests***
+
+# exported-concept-is-visible
+`exported_concepts` exports and defines `- ⟨Concept⟩ is a concept.`; a module that requires it and defines `- ⟨DependantConcept⟩ depends on the ⟨Concept⟩ concept.` parses.
+
+# export-of-imported-concept
+`exported_concepts_nested` imports `exported_concepts_base` (which defines Concept) and exports `- ⟨NestedConcept⟩ depends on the ⟨Concept⟩ concept.`; a module requiring it and using NestedConcept parses.
+
+# export-arrives-in-definitions
+A module that requires `exported_concepts` and has no `definitions` section gets the definitions [{markdown `- ⟨Concept⟩ is a concept.`}].
+
+# middle-module-sees-base-exports
+`shared_export_base` exports KeyStore; `shared_export_middle` requires [base] and uses KeyStore; `shared_export_top` requires [base, middle] and uses KeyStore; parsing `shared_export_top` succeeds.
+
+# base-module-may-export-nothing
+Base exports nothing, Middle requires [Base] and exports MiddleConcept, Top requires [Base, Middle] and uses MiddleConcept; the chain of Top is Base, Middle, Top.
+
+***acceptance tests***
+
+# exports-are-not-transitive
+`exported_concepts_transitive_l2` exports Concept, `exported_concepts_transitive_l1` requires it, and a module requiring only l1 and mentioning Concept raises `PlainSyntaxError` holding `not defined`.
+
+# concept-not-exported
+A module requiring `exported_concepts_not_declared`, which defines Concept without exporting it, and mentioning Concept raises `PlainSyntaxError` holding `not defined`.
+
+# redefined-export
+Base exports and defines BaseConcept, Middle requires [Base] and defines BaseConcept again, Top requires [Base, Middle]; listing the chain of Top raises `PlainSyntaxError` holding `Concepts were defined multiple times: ⟨BaseConcept⟩`.

@@ -1,0 +1,19 @@
+---
+module: spec_tree
+func_id: collect-specifications-for-func-id
+---
+
+***conformance tests***
+
+# specifications-up-to-the-func-id
+A tree has the definition item `- a thing is a thing.` and the functionalities f1 to f4, each fi with the markdown `Functionality i.`, the conformance scenario `fi-works` with the text `Functionality i works.` and the acceptance scenario `fi-flow` with the text `Functionality i flows.`.
+- The specifications for f2 are `definitions` [`- a thing is a thing.`], `implementation reqs` [], `test reqs` [], `functional specs` [`Functionality 1.`, `Functionality 2.`], `conformance_tests` [{id `f2-works`, text `Functionality 2 works.`}], `acceptance_tests` [{id `f2-flow`, text `Functionality 2 flows.`}].
+- The code variables are none.
+
+# single-functionality
+For the tree of the module text `***implementation reqs***`, `- Simple implementation requirement`, `***functional specs***`, `# simple-functionality`, `Simple functionality` (one per line, blank lines between sections), the specifications for simple-functionality are `definitions` [], `implementation reqs` [`- Simple implementation requirement`], `test reqs` [], `functional specs` [`Simple functionality`], and empty scenario lists.
+
+***acceptance tests***
+
+# unknown-func-id
+Asking for the specifications of `a` in the tree of simple-functionality raises `Functionality a does not exist.`.

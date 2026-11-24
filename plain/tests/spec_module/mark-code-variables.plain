@@ -1,0 +1,14 @@
+---
+module: spec_module
+func_id: mark-code-variables
+---
+
+***conformance tests***
+
+# token-is-recorded
+Rendering `{% raw %}{% include 't', a: 'A', b: 'B' %}{% endraw %}` with `t` holding `{% raw %}{{ b | code_variable }}{% endraw %}` and an empty code-variables mapping outputs a 32-character hex token, and the mapping becomes {token: {`a`: `B`}}.
+
+# outside-include
+Rendering `a {% raw %}{{ 'x' | code_variable }}{% endraw %}` with an empty code-variables mapping outputs `a ` and a token mapped to {`code_variables`: `x`}.
+
+***acceptance tests***

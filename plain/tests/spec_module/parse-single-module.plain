@@ -1,0 +1,47 @@
+---
+module: spec_module
+func_id: parse-single-module
+---
+
+***conformance tests***
+
+# simple-module
+Parsing `simple.plain` gives the module name `simple`, the tree of :PlainSourceTree: Example, and an empty `requires` list.
+
+# nested-module-name
+Parsing `sub/m.plain` over the parent directory gives the module name `sub/m`.
+
+# valid-concepts
+A module defining `- ⟨Task⟩ is a thing to do.` and `- ⟨User⟩, ⟨Admin⟩ are people.`, and using them in its implementation reqs and functional specs together with ⟨Implementation⟩, parses.
+
+# sorted-definitions
+A module defining, in this order, `- ⟨Concept3⟩ ... ⟨Concept1⟩ and ⟨Concept2⟩ ...`, `- ⟨Concept2⟩ ... ⟨Concept1⟩ ...`, `- ⟨Concept1⟩ is a concept.` gives the definitions Concept1, Concept2, Concept3 in that order.
+
+***acceptance tests***
+
+# wrong-extension
+Parsing `test.txt` raises `PlainSyntaxError`.
+
+# undefined-concept
+A module using ⟨User⟩ in a functionality without defining it raises `PlainSyntaxError`; so does one that defines Task but uses Task and the undefined Visitor in one sentence.
+
+# definition-without-concept
+A module whose definition is `- A plain sentence.` raises `PlainSyntaxError` holding `Invalid definition specification text`.
+
+# concept-defined-twice
+A module defining Task twice raises `PlainSyntaxError` holding `Concepts were defined multiple times`.
+
+# cyclic-definitions
+A module whose definitions mention each other in a cycle raises `PlainSyntaxError` holding `cycle(s) in concept definitions`.
+
+# cyclic-definitions-across-import
+A module defining `- ⟨Concept⟩ is the concept that ⟨DependantConcept⟩ builds on.` and importing `required_concepts`, whose definition of DependantConcept mentions Concept, raises `PlainSyntaxError` holding `Found 1 cycle` and both definitions.
+
+# cyclic-definitions-through-sub-item
+A module with `- ⟨Order⟩ is a purchase.` and the nested item `  - It is placed by a ⟨Customer⟩.`, `- ⟨Customer⟩ has ⟨Order⟩ items.`, and `- ⟨Receipt⟩ is for an ⟨Order⟩.` raises a message holding `Cycle 1: ⟨Order⟩ -> ⟨Customer⟩ -> ⟨Order⟩` and the Order item with its nested line, and not naming Receipt.
+
+# liquid-error-names-module
+The module `unterminated_output` raises `PlainSyntaxError` whose message starts with `Plain syntax error: Invalid Liquid at unterminated_output`, then the line `5` and the column `0`, each after a colon.
+
+# include-ending-in-newline
+A functionality whose body includes, in a nested item, a template that ends with a newline, followed by a comment line, parses.

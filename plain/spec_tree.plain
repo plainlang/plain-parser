@@ -1,0 +1,67 @@
+---
+description: Error classes, semantic ids, and helpers that walk a plain source tree by func-id.
+import:
+  - plain_parser_base
+requires:
+  - cycle_graph
+---
+
+***definitions***
+
+- :ErrorClasses: is the `plain_parser.exceptions` module of :PythonApi:.
+
+- :SpecTreeHelpers: is the `plain_parser.plain_spec` module of :PythonApi:.
+
+- :LinkRegistry: is a caller-owned list of entries `{"text", "target", "sections"}`, one per distinct :LinkedResource:, where `sections` lists the section name of every place the link was found, in order.
+
+***functional specs***
+
+# define-error-classes
+:ErrorClasses: defines the error classes `PlainSyntaxError`, `UnsupportedBase64Content`, `UnsupportedResourceType`, `InvalidFridArgument`, `InvalidLiquidVariableName`, `ModuleDoesNotExistError`, `MissingFunctionalitiesError`, `ImportedModuleWithFunctionalitiesError` and `MissingTestPlainFileError`.
+- Each derives directly from the base exception class and adds no behavior.
+
+# check-semantic-id
+:SpecTreeHelpers: tells whether a text is a :SemanticId:.
+- The whole text must match; `add-task-2` is one, `add--task` and `ädd` are not.
+
+# walk-func-ids
+:SpecTreeHelpers: walks the :FuncId: values of a :PlainSourceTree: in file order.
+- All func-ids are yielded lazily; a tree without `functional specs` yields none.
+- The first func-id is returned, or none when the tree has no :Functionality:.
+- The next and the previous func-id of a given one are returned, or none at the end; an unknown func-id raises `Functionality {frid} does not exist.`.
+- The func-ids before a given one are returned as a list; for an unknown func-id every func-id is returned.
+- The tree is reported as having acceptance tests when any :Functionality: has a non-empty `acceptance_tests` list.
+
+# select-func-id-range
+:SpecTreeHelpers: returns the func-ids from a start func-id through an optional end func-id, both inclusive, in file order.
+- Without an end, the range runs to the last func-id.
+- An unknown start or end, or a start after the end, raises `InvalidFridArgument` with the text of :ErrorMessages:.
+- A start equal to the end returns that one func-id.
+
+# collect-specifications-for-func-id
+:SpecTreeHelpers: returns the specification texts that build one :Functionality: of a :PlainSourceTree:, and the :CodeVariable: values they use.
+- The result has the keys `definitions`, `implementation reqs`, `test reqs`, `functional specs`, `conformance_tests` and `acceptance_tests`, in that order.
+- The three list sections hold the `markdown` of every item, or an empty list when the section is absent.
+- `functional specs` holds the `markdown` of every :Functionality: up to and including the given one.
+- `conformance_tests` and `acceptance_tests` hold `{"id", "text"}` for each :Scenario: of the given :Functionality: only.
+- An unknown func-id raises `Functionality {frid} does not exist.`.
+
+# replace-code-variables
+When an item of a :PlainSourceTree: carries `code_variables`, collecting specifications for a func-id records each :CodeVariable: and puts its value in place of the placeholder in the item text: the name inside double curly braces, with one space inside each brace pair.
+- Replacement is on by default and can be turned off; recording happens either way.
+- The recorded variables are returned as a mapping from name to value, or none when no item carries any.
+- One name with two different values raises `Code variable {name} has multiple values: {first} and {second}`.
+- Scenario texts are handled as item texts.
+
+# collect-linked-resources
+:SpecTreeHelpers: adds every :LinkedResource: of a :PlainSourceTree: to a :LinkRegistry: and sorts the registry by link text.
+- Sections are read in the order `definitions`, `implementation reqs`, `test reqs`, `functional specs`; an optional list of section names limits the sections read.
+- Functionalities are read up to and including an optional func-id, else all of them.
+- When scenarios are included, the links of the conformance and acceptance scenarios are added under `functional specs`, for the given func-id only when one is given, else for every :Functionality:.
+- A link already in the registry with the same text and target gets the section appended to its `sections`.
+- The same text with another target, the same target with another text, and a link matching two registry entries each raise an error of :ErrorMessages:.
+- The result is true when the given func-id was reached.
+- A tree that is not a mapping raises `plain_source_tree must be a dictionary.`; an unknown func-id raises `frid {frid} does not exist.`.
+
+# hash-specifications
+:SpecTreeHelpers: hashes a text to the lowercase hex SHA-256 digest of its UTF-8 bytes, and hashes a specifications value as the digest of its JSON text with an indent of 4 and ASCII escapes.

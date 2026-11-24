@@ -1,0 +1,42 @@
+---
+description: Strongly connected components and elementary cycles of a directed graph.
+import:
+  - plain_parser_base
+---
+
+***definitions***
+
+- :Graph: is a directed graph given as a mapping from each node to the list of its successor nodes.
+  - A node that appears only as a successor is a node with no successors.
+  - Node order is the iteration order of the mapping, followed by successor-only nodes in order of first mention.
+
+- :GraphSearch: is the `plain_parser.graph` module of :PythonApi:.
+
+***implementation reqs***
+
+- :GraphSearch: finds components with Tarjan's algorithm and cycles with Johnson's algorithm (D. B. Johnson, SIAM J. Comput. 4(1):77-84, 1975).
+
+- :GraphSearch: keeps its own stack of frames instead of recursing, so the depth of a :Graph: is not bounded by the Python recursion limit.
+
+***functional specs***
+
+# find-strongly-connected-components
+:GraphSearch: returns the strongly connected components of a :Graph: as a list of node sets.
+- Every node, successor-only nodes included, is in exactly one component.
+- A node on no cycle is a component of its own.
+- A :Graph: whose longest path is twice the Python recursion limit is handled.
+
+# list-simple-cycles
+:GraphSearch: yields every elementary cycle of a :Graph: exactly once, each as the list of its nodes in edge order.
+- Each node of a cycle has the next node as a successor, and the last node has the first.
+- A node that is its own successor is a one-node cycle; all one-node cycles come first, in node order.
+- Every longer cycle starts at its earliest node in node order, and longer cycles come in non-decreasing order of that first node.
+- A successor listed twice for one node does not repeat any cycle.
+- An empty :Graph: and a :Graph: without cycles yield nothing.
+
+# limit-cycle-search
+:GraphSearch: takes an optional cycle limit and stops after yielding that many cycles.
+- A limit of 0 yields nothing; no limit yields every cycle.
+- Cycles are found lazily: a :Graph: with billions of cycles and a limit of 11 returns 11 cycles at once.
+- Nodes that lie on no cycle are never searched, so an acyclic part with exponentially many paths costs nothing.
+- A cycle longer than twice the Python recursion limit is found.

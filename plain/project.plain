@@ -1,0 +1,53 @@
+---
+description: A module with its requires chain and the test plain files bound to its functionalities.
+import:
+  - plain_parser_base
+requires:
+  - test_plain_file
+---
+
+***definitions***
+
+- :ProjectParser: is the `plain_parser.project` module of :PythonApi:.
+
+- :BoundFile: is a :TestPlainFile: bound to a :Functionality: of the chain: its path on disk, its name, and its parsed form.
+  - The name is its path relative to the entry module's directory, with `/` as separator.
+
+***test reqs***
+
+- :ConformanceTests: build the fixture `todo.plain`: it defines `- ⟨Task⟩ is a thing to do.`, has one implementation req and the functionalities `add-task` (`A ⟨Task⟩ can be added.`) and `list-tasks` (`Every ⟨Task⟩ is listed.`); it is parsed with the tests folder `tests` next to it unless a scenario names other folders.
+
+***functional specs***
+
+# discover-test-plain-files
+:ProjectParser: lists every file ending in `.plain` under a list of :TestsFolder: entries, as its path and name.
+- Folders are read in the given order; within one folder, directories and files are walked in sorted name order, a directory's files before its subdirectories.
+- A folder that does not exist is skipped.
+
+# bind-test-plain-files
+:ProjectParser: parses a module's :RequiresChain: and adds the scenarios of every discovered :TestPlainFile: to the :Functionality: it binds to, returning the chain and the :BoundFile: list in discovery order.
+- A file whose `module` is not in the chain is passed over without being parsed.
+- Each other file is parsed over :TemplateDirs:, and its conformance and acceptance scenarios are appended to the bound :Functionality: as mappings.
+- Files bound to one :Functionality: are merged in discovery order.
+- The file name and location are convention only; the :Frontmatter: decides the binding.
+
+# reject-invalid-test-plain-files
+:ProjectParser: rejects an invalid file under a :TestsFolder: with the texts of :ErrorMessages:, naming the file by its name.
+- A file that is not valid UTF-8 raises `File '{name}' under a tests folder is not a text file.`.
+- A file holding a :Base64Blob: raises `UnsupportedBase64Content`.
+- Invalid YAML in the :Frontmatter: raises `File '{name}' under a tests folder has invalid frontmatter: {error}`.
+- A `.plain` file without both binding keys raises `is under a tests folder but is not a test plain file`.
+- A file whose func-id the module does not have raises `binds to functionality '{module}:{func_id}', which module '{module}' does not have.`.
+- Errors of the file itself keep their own texts.
+
+# check-bound-scenarios
+:ProjectParser: checks the scenarios of each bound :TestPlainFile: against the :Functionality: they join.
+- The visible concepts are those of the bound module's tree: its own, imported and exported-to-it definitions; a required module's scenarios do not see the entry module's concepts.
+- Concept errors raise `Found {count} errors in test plain file '{name}':` followed by one error per line.
+- A :ScenarioId: used twice across the files bound to one :Functionality: raises `Duplicate scenario-id `{id}` for functionality '{module}:{func_id}'; it is first used at line {line} in test plain file '{name}'.`, at the line and file of the second use; two functionalities may share a :ScenarioId:.
+
+# require-test-plain-files
+When asked to, :ProjectParser: checks that every :Functionality: of every module in the chain, in chain order, has at least one bound :TestPlainFile:, and raises `MissingTestPlainFileError` for the first that has none.
+- The message is `Functionality {module}:{func_id} has no test plain file. Add one, by convention tests/{module}/{func_id}.plain, with the add-test-scenarios skill.`.
+- A bound file with empty sections satisfies the check.
+- A file whose `module` is misspelled binds to nothing, so its :Functionality: is reported.

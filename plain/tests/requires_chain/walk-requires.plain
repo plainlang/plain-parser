@@ -1,0 +1,38 @@
+---
+module: requires_chain
+func_id: walk-requires
+---
+
+***conformance tests***
+
+# normal-requires
+`normal_requires_main` requires `normal_requires_2`, which requires `normal_requires_1`, which requires `normal_requires_common`; parsing `normal_requires_main` succeeds.
+
+# ancestor-listed-first
+Top requires [Base, Middle] and Middle requires [Base]; the chain of Top is Base, Middle, Top.
+
+# module-listed-twice-in-a-row
+Top requires [Base, Base]; the chain of Top is Base, Top.
+
+***acceptance tests***
+
+# two-branches-share-base
+Top requires [Left, Right], Left and Right each require [Base]; parsing Top raises `PlainSyntaxError` holding `There must be a fixed order how required modules are dependent`. The same holds with Right listed first, with the branches meeting two levels down, with Top also listing Base first, and when Right requires [Left, Other] and Left and Other each require [Base].
+
+# independent-branches
+Top requires [Left, Right], neither of which has `requires`, or Right requires [Other]; parsing Top raises `PlainSyntaxError` holding `There must be a fixed order how required modules are dependent`.
+
+# listed-again-after-dependent
+Top requires [Base, Middle, Base] and Middle requires [Base]; parsing Top raises `PlainSyntaxError` holding `There must be a fixed order how required modules are dependent`.
+
+# ancestor-listed-after-dependent
+Top requires [Middle, Base] and Middle requires [Base]; parsing Top raises `PlainSyntaxError` holding `There must be a fixed order how required modules are dependent`.
+
+# ancestor-listed-in-every-module
+Top requires [Base, Middle, Upper], Upper requires [Base, Middle], Middle requires [Base]; parsing Top raises `PlainSyntaxError` holding `There must be a fixed order how required modules are dependent`.
+
+# circular-requires
+`circular_requires_main` requires `circular_requires_sub`, which requires `circular_requires_main`; parsing the main module raises an error holding `Circular required module detected`.
+
+# non-existent-require
+A module requiring `non_existent_module` raises `ModuleDoesNotExistError` holding `Module does not exist`, both when parsing the module alone and when listing its chain.

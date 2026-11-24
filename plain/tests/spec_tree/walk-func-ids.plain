@@ -1,0 +1,28 @@
+---
+module: spec_tree
+func_id: walk-func-ids
+---
+
+***conformance tests***
+
+# func-ids-in-file-order
+A :PlainSourceTree: with the functionalities f1, f2, f3, f4 yields the func-ids f1, f2, f3, f4.
+
+# first-func-id
+The first func-id of a tree with the functionalities f1, f2 is f1; a tree without `functional specs` has none.
+
+# next-and-previous
+In a tree with the single functionality simple-functionality, the next and the previous func-id of simple-functionality are both none.
+
+# func-ids-before
+The func-ids before f3 in a tree with f1, f2, f3, f4 are [f1, f2].
+
+# has-acceptance-tests
+A tree whose second functionality has one acceptance scenario has acceptance tests.
+- A tree whose functionalities have no acceptance scenario has none.
+- An empty tree has none.
+
+***acceptance tests***
+
+# unknown-func-id
+Asking for the next or the previous func-id of `missing` in a tree with the functionality simple-functionality raises `Functionality missing does not exist.`.

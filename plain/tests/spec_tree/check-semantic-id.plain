@@ -1,0 +1,14 @@
+---
+module: spec_tree
+func_id: check-semantic-id
+---
+
+***conformance tests***
+
+# accepts-hyphen-joined-segments
+`a`, `add-task`, `add-task-2`, `2`, `a-b-c` and `x1-y2` are each a :SemanticId:.
+
+# rejects-other-shapes
+The empty text, `-`, `---`, `-add-task`, `add-task-`, `add--task`, `add_task`, `Add-task`, `add task`, `add.task` and `ädd` are each not a :SemanticId:.
+
+***acceptance tests***

@@ -1,0 +1,16 @@
+---
+module: spec_module
+func_id: marshall-plain-source
+---
+
+***conformance tests***
+
+# links-are-rendered-as-resources
+A module with the files `task_list_ui_specification.yaml` and `add_new_task_modal_specification.yaml` next to it, whose second and third functionalities each link one of them with the file name as link text, gives the second functionality linked_resources [{text `task_list_ui_specification.yaml`, target `task_list_ui_specification.yaml`}] and the third [{text `add_new_task_modal_specification.yaml`, target `add_new_task_modal_specification.yaml`}].
+- The functionality markdown holds `` `[resource]task_list_ui_specification.yaml` `` and `` `[resource]add_new_task_modal_specification.yaml` `` in place of the links.
+
+# imports-merge-in-order
+The module `diamond_imports_main` imports `diamond_import_1` and `diamond_import_2`, which both import `diamond_import_common`; each import module defines one concept and has one implementation req and one test req naming it, and the main module has the implementation req `- ⟨MainExecutableFile⟩ of ⟨App⟩ should be called "hello_world.py".` and the functionality `display-hello-world`.
+- Its marshalled tree lists the definitions, implementation reqs and test reqs of `diamond_import_common`, `diamond_import_1` and `diamond_import_2`, in that order, each once, and then the own implementation req.
+
+***acceptance tests***

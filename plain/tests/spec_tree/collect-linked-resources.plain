@@ -1,0 +1,30 @@
+---
+module: spec_tree
+func_id: collect-linked-resources
+---
+
+***conformance tests***
+
+# stops-at-the-func-id
+A tree has the functionalities f1 to f4; each fi links `ri.md`, its conformance scenario links `ci.md` and its acceptance scenario links `ai.md`, each link with its target as text.
+- Collecting with scenarios up to f2 returns true and the registry targets are `a2.md`, `c2.md`, `r1.md`, `r2.md`.
+
+# every-functionality-and-scenario
+Collecting the same tree with scenarios and without a func-id returns false and the registry targets are `a1.md` to `a4.md`, `c1.md` to `c4.md` and `r1.md` to `r4.md`, sorted.
+
+# without-scenarios
+Collecting the same tree without scenarios gives the registry targets `r1.md`, `r2.md`, `r3.md`, `r4.md`.
+
+# same-link-twice-records-both-sections
+A tree whose `implementation reqs` item and functionality both link text `notes` to `notes.md` gives one registry entry with sections [`implementation reqs`, `functional specs`].
+
+***acceptance tests***
+
+# tree-is-not-a-mapping
+Collecting from a list instead of a tree raises `plain_source_tree must be a dictionary.`.
+
+# unknown-func-id
+Collecting the tree of f1 to f4 up to f9 raises `frid f9 does not exist.`.
+
+# same-text-other-target
+A tree whose two items link the text `notes` to `a.md` and to `b.md` raises `The file b.md is linked to multiple linked resources with the same text: notes`.

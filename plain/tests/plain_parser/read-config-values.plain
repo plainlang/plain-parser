@@ -1,0 +1,41 @@
+---
+module: plain_parser
+func_id: read-config-values
+---
+
+***conformance tests***
+
+# underscore-key
+A config file holding `template_dir: template` makes `plain-parser check project/top.plain` print the OK line.
+
+# other-keys-ignored
+A config file holding `unittests-script: scripts/x.sh`, `build-dest: dist`, `template-dir: template` and `verbose: true` makes `plain-parser check project/top.plain` print the OK line.
+
+# template-dir-option-wins
+A config file holding `template-dir: does_not_exist` and the option `--template-dir project/template` make `plain-parser check project/top.plain` print the OK line.
+
+# project-with-test-plain-files
+From inside `project`, `plain-parser check todo.plain` prints exactly `todo.plain: OK`.
+
+# tests-folder-from-config
+With `tests` renamed `scenarios` and a config file holding `conformance-tests-script: run.sh` and `tests-folder: scenarios`, run from outside `project`, `check` prints the OK line; after removing `scenarios/todo/add-task.plain` it reports `todo:add-task has no test plain file`. The same holds with the underscore keys, and with `tests-folder` as the list [`scenarios`, `more`].
+
+# config-tests-folder-only
+With `tests-folder: scenarios` in the config file and the files still under `tests`, `check` exits with code 1 and reports `todo:add-task has no test plain file`.
+
+# tests-folder-option-wins
+With the files under `scenarios` and `tests-folder: does_not_exist` in the config file, `check project/todo.plain` reports `todo:add-task has no test plain file`, and `check project/todo.plain --tests-folder project/scenarios` prints the OK line.
+
+# tests-folder-option-repeated
+With `list-tasks.plain` moved to `project/more`, `check` reports `todo:list-tasks has no test plain file`, and `check` with `--tests-folder project/tests --tests-folder project/more` prints the OK line.
+
+# without-conformance-script
+With the `tests` folder removed and the config file holding only `unittests-script: test_scripts/run_unittests.sh`, `check` prints the OK line.
+
+# without-tests-folder
+With the config file removed and `tests/todo/add-task.plain` holding `not a test plain file`, `check` prints the OK line and `parse` prints `test_plain_files` {}.
+
+***acceptance tests***
+
+# conformance-without-tests-folder
+With a config file holding only `conformance-tests-script: run.sh`, `check` and `parse` each exit with code 2, print nothing on standard output and write `no tests folder is given. Pass --tests-folder or set tests-folder in the config file.` on standard error; `check` with `--tests-folder project/tests` prints the OK line.

@@ -1,0 +1,20 @@
+---
+module: resource_loading
+func_id: relative-resource-path
+---
+
+***conformance tests***
+
+# same-directory
+From `/p/spec`, the target `notes.md` in `/p/spec` is `notes.md`, and `../shared.md` there is `../shared.md`.
+
+# other-directory
+From `/p/app/python`, `notes.md` in `/p/tpl` is `../../tpl/notes.md` and `../sub.md` in `/p/tpl` is `../../tpl/../sub.md`.
+
+# subdirectory
+From `/p/spec`, `deep.md` in `/p/spec/tpl/sub` is `tpl/sub/deep.md`.
+
+***acceptance tests***
+
+# no-relative-path
+When computing a relative path fails as for another drive, `notes.md` in `/q/tpl` from `/p/spec` is `/q/tpl/notes.md`.

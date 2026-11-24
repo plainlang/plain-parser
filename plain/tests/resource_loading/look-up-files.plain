@@ -1,0 +1,26 @@
+---
+module: resource_loading
+func_id: look-up-files
+---
+
+***conformance tests***
+
+# first-dir-wins
+With `notes.md` in both directories `first` and `second`, resolving `notes.md` over [first, second] gives `first/notes.md`.
+
+# later-dir-is-searched
+With `notes.md` only in `second`, resolving `notes.md` over [first, second] gives `second/notes.md`, and finding gives the directory `second`.
+
+# missing-file
+Resolving and finding `missing.md` over a directory without it give none, and reading gives none.
+
+# parent-relative-path
+With `shared.md` in `root` and the directory `root/plain`, resolving `../shared.md` over [root/plain] gives `root/plain/../shared.md`.
+
+# directory-hides-later-file
+With a directory `notes.md` in `first` and a file `notes.md` in `second`, resolving `notes.md` over [first, second] gives `first/notes.md`.
+
+# read-text
+With `notes.md` holding `# hello` in `second`, reading `notes.md` over [first, second] gives `# hello`.
+
+***acceptance tests***

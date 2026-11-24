@@ -1,0 +1,96 @@
+---
+description: Shared concepts, tech stack and test setup of plain-parser, the parser for the plain specification language.
+---
+
+***definitions***
+
+- :PythonApi: is the public Python API of :Implementation:, with its packages, modules, constants, classes and function signatures.
+  - It is defined in [resources/python_api.md](resources/python_api.md).
+
+- :ErrorMessages: is the catalogue of every error class and exact error message text :Implementation: raises.
+  - It is defined in [resources/error_messages.md](resources/error_messages.md).
+
+- :PlainFile: is a UTF-8 text file whose name ends in `.plain`.
+
+- :Frontmatter: is the optional YAML mapping between two `---` lines at the very start of a :PlainFile:.
+
+- :SemanticId: is a text of one or more segments of lowercase ASCII letters and digits, joined by single hyphens.
+  - `add-task`, `2`, `x1-y2` are valid; `-a`, `a-`, `a--b`, `a_b`, `A`, `a b`, `a.b` and the empty text are not.
+
+- :FuncId: is a :SemanticId: that names a functionality.
+
+- :ScenarioId: is a :SemanticId: that names a test scenario.
+
+- :ConceptToken: is a name made of ASCII letters, digits, `+`, `-`, `.` and `_`, written between two colons.
+
+- :PredefinedConcepts: are the ten :ConceptToken: values that are defined in every module: :ConformanceTests:, :UnitTests:, :AcceptanceTest:, :AcceptanceTests:, :Implementation:, :plainDefinitions:, :plainImplementationReqs:, :plainFunctionality:, :plainTestReqs:, :plainImplementationCode:.
+
+- :Module: is a :PlainFile: holding a specification: :Frontmatter: followed by sections.
+  - A section starts at a line `***<name>***`; the names are `definitions`, `implementation reqs`, `test reqs` and `functional specs`.
+  - The module name is the file path without `.plain`, relative to the directory it is looked up in, with `/` as separator.
+
+- :ListSection: is the `definitions`, `implementation reqs` or `test reqs` section of a :Module:; its content is `- ` list items.
+
+- :CommentLine: is a line whose first non-space character is `>`; it is dropped before parsing.
+
+- :Functionality: is a `# <func-id>` heading in the `functional specs` section of a :Module:, with its :FuncId: and the body up to the next heading or section line.
+
+- :Definition: is a list item of the `definitions` section that starts with `- ` and one or more comma-separated :ConceptToken: values, which are the concepts it defines.
+
+- :TestPlainFile: is a :PlainFile: whose :Frontmatter: has the keys `module` and `func_id`; it holds the test scenarios of one :Functionality:.
+
+- :Scenario: is a `# <scenario-id>` heading in a :TestPlainFile: with its :ScenarioId: and the text up to the next heading or section line.
+
+- :TestsFolder: is a directory scanned recursively for :TestPlainFile: files.
+
+- :TemplateDirs: is the ordered list of directories in which modules, Liquid include templates and linked files are looked up; the first match wins.
+  - The first entry is the directory of the entry :Module:.
+
+- :LinkedResource: is a markdown link `[text](target)` in specification text; it is recorded as the pair of its text and its target as written.
+
+- :CodeVariable: is a Liquid variable whose value was marked with the `code_variable` filter; it is recorded as its name and value.
+
+- :Base64Blob: is a contiguous run of at least 8192 characters from `A-Z`, `a-z`, `0-9`, `+`, `/`, `_` and `-`, followed by up to two `=`, and optionally preceded by a `data:<type>/<subtype>;base64,` header.
+
+- :IncludeTag: is the Liquid `include` tag as used in a :PlainFile:, with optional named arguments after the template name.
+
+- :PlainSourceTree: is the marshalled form of one parsed :Module:, keyed by section name.
+  - It is defined in [resources/plain_source_tree.md](resources/plain_source_tree.md).
+
+- :RequiresChain: is the list of `(module name, PlainSourceTree)` pairs of a :Module: and every module reached through its `requires` lists, deepest ancestor first and the :Module: itself last, each module once.
+
+***implementation reqs***
+
+- :Implementation: is a Python 3.11 package named `plain_parser` under `src/plain_parser`, distributed as `plain-parser` with the MIT license.
+
+- :Implementation: has a `pyproject.toml` built with `hatchling>=1.32,<2` and `hatch-vcs>=0.5,<0.6`, the version taken from git, `requires-python = ">=3.11"`, and the wheel package `src/plain_parser`.
+
+- :Implementation: depends on `python-liquid2>=0.4.0,<0.5`, `mistletoe>=1.6.0,<2`, `python-frontmatter>=1.3.0,<2` and `pyyaml>=6,<7`, and nothing else at run time.
+
+- :Implementation: has the optional dependency group `dev` with `pytest==9.2.0`, `flake8==7.5.0`, `black==26.10.1`, `isort==9.0.2` and `mypy==2.4.1`.
+
+- :Implementation: exposes exactly the names, signatures, constants and return shapes of :PythonApi:.
+
+- :Implementation: raises the error classes and exact message texts of :ErrorMessages:.
+
+- :Implementation: parses markdown with mistletoe, runs Liquid with python-liquid2, reads :Frontmatter: with python-frontmatter and YAML with pyyaml.
+
+- :Implementation: is formatted with black and isort (profile black) at line length 120, passes flake8 with max line length 120, and passes `mypy src`.
+
+- :UnitTests: use pytest, live in `tests/` with files named `test_*.py`, and keep their fixture files in `tests/data/`.
+
+- :UnitTests: are run with [test_scripts/run_unittests_python.sh](test_scripts/run_unittests_python.sh).
+
+***test reqs***
+
+- :ConformanceTests: use pytest and are run with [test_scripts/run_conformance_tests_python.sh](test_scripts/run_conformance_tests_python.sh).
+
+- :ConformanceTests: use only :PythonApi: and the `plain-parser` command, which is on `PATH`; they never import a name :PythonApi: does not list.
+
+- :ConformanceTests: write every fixture file they need under the pytest `tmp_path` directory and never read files of the build folder.
+
+- :ConformanceTests: match error messages against the texts in :ErrorMessages:.
+
+- :ConformanceTests: do not access the network and are never skipped.
+
+- :ConformanceTests: read `⟨Name⟩` in a scenario as the concept token `Name` written between two colons, so `- ⟨A⟩ uses ⟨B⟩.` is a definition of A that mentions B.

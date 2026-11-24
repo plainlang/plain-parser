@@ -1,0 +1,143 @@
+---
+description: Parsing of one spec plain file into a plain source tree, with its imports, links, code variables and module checks.
+import:
+  - plain_parser_base
+requires:
+  - concepts
+---
+
+***definitions***
+
+- :ModuleParser: is the `plain_parser.plain_file` module of :PythonApi:.
+
+- :ParseResult: is the result of parsing a :Module: text before validation: the section contents, the :Frontmatter: with the text after it, the `requires` list, and the concepts still required by imported modules.
+
+- :SectionLine: is a paragraph that is only a section name wrapped in three asterisks on each side, as in `***definitions***`.
+
+- :LinkRendering: is how a markdown link is written in marshalled text: a code span holding `[resource]` followed by the link text.
+
+***implementation reqs***
+
+- :ModuleParser: reads the rendered text into a mistletoe `Document` inside a `MarkdownRenderer` subclass context, so blank lines become `BlankLine` tokens, and removes every block quote token, nested ones included, as a :CommentLine:.
+
+- :ModuleParser: renders tokens back to markdown with a `MarkdownRenderer` subclass whose link rendering is :LinkRendering:.
+
+- :ModuleParser: keeps each list section as a mistletoe `Document` whose children are list items, and each :Functionality: as its func-id, heading line number, the block tokens of its body, and its links.
+
+- :ModuleParser: replaces each recorded code-variable token in marshalled text with the placeholder of its variable name, the name between double curly braces with one space inside each brace pair.
+
+***functional specs***
+
+# name-module-files
+:ModuleParser: converts between module names and file names: the file name is the module name with `.plain` appended, and the module name is the file name with every `.plain` removed.
+
+# normalize-line-endings
+:ModuleParser: turns every `\r\n` and every lone `\r` into `\n`, so `a\r\nb\rc\nd` becomes `a\nb\nc\nd`.
+
+# read-list-sections
+:ModuleParser: parses the text of a :Module: into its list sections and returns a :ParseResult:.
+- Line endings are normalized and :Frontmatter: is read first; invalid YAML raises `Plain syntax error: Invalid frontmatter: {error}`.
+- Liquid is rendered, then every :CommentLine: is dropped.
+- Each :SectionLine: starts its section; each `- ` item that follows, nested items included, belongs to it.
+- A list section line with no item gives an empty section.
+- Line numbers in errors count from the first line of the file, :Frontmatter: included.
+- A module name given to the parser is named in errors as ` in module '{module}'`.
+
+# reject-invalid-sections
+:ModuleParser: rejects a :Module: whose section structure is invalid, with the `PlainSyntaxError` texts of :ErrorMessages:.
+- A :SectionLine: with an unknown name gives `Invalid specification heading`.
+- A section given twice gives `Duplicate specification heading`.
+- `definitions` after another section gives `Definitions specification must be the first specification in the section`.
+- A list before the first :SectionLine: gives `Missing specification heading`.
+- Any other paragraph outside `functional specs` gives `Invalid specification`.
+- A code block or another block in a list section gives `Invalid source structure`.
+- A line that is exactly a `conformance tests` or `acceptance tests` section line, at any indentation, gives `The ... section is not allowed in a spec plain file`, checked on the rendered text before markdown parsing.
+
+# read-functionalities
+:ModuleParser: reads `functional specs` as a list of :Functionality: entries in file order.
+- A level-1 heading starts a :Functionality:; its text is the :FuncId:.
+- The body is every block up to the next heading or :SectionLine:: paragraphs, lists at any indentation, code blocks, tables and any other block, with blank lines between blocks kept.
+- An empty `functional specs` section gives an empty list.
+
+# reject-invalid-functionalities
+:ModuleParser: rejects invalid functionalities with the `PlainSyntaxError` texts of :ErrorMessages:.
+- A heading outside `functional specs` gives `A # <func-id> heading is allowed only in the functional specs section`.
+- A heading of level 2 or more gives `Invalid heading level`.
+- A heading text that is not a :FuncId:, the empty text included, gives `Invalid func-id`.
+- A repeated func-id gives `Duplicate func-id`, naming the line of the first use.
+- Any block before the first heading gives `Content before the first # <func-id> heading`, with the hint that the previous syntax is not supported.
+- A heading whose body is empty or only comments gives `Functionality ... has no body.` at the heading line.
+
+# marshall-plain-source
+:ModuleParser: turns the sections of a :ParseResult: into a :PlainSourceTree:.
+- Each list item becomes `{"markdown"}` with the item rendered back to markdown and stripped, plus `linked_resources` when it has links.
+- Each :Functionality: becomes `{"id", "markdown", "linked_resources", "conformance_tests", "acceptance_tests"}` with its body rendered back to markdown without leading and trailing blank lines and two empty scenario lists.
+- Links are written with :LinkRendering:, and tables are re-rendered with padded cells.
+- A section absent from the :ParseResult: is absent from the tree.
+
+# find-linked-resources
+:ModuleParser: records every markdown link of a list item and of a :Functionality: body as a :LinkedResource:, in text order, after resolving it over :TemplateDirs:.
+- A target with a URL scheme or an absolute path gives `Only relative links are allowed`.
+- A target found in no directory gives `Link ... does not exist.`, listing the searched directories numbered from 1, highest precedence first.
+- A target that resolves to a directory gives `Link ... must be a file`.
+- A link without exactly one text child gives `Link ... must have text specified`.
+- A target ending in `.plain` gives `Referenced resource '...' is a .plain file.`.
+- Each error message is the text of :ErrorMessages:; resolution does not depend on the working directory.
+
+# import-modules
+:ModuleParser: merges the list sections of every module named in the `import` list of the :Frontmatter: before the module's own sections.
+- Imported modules are looked up in :TemplateDirs:, parsed with the same code variables, and processed in list order, their own imports first.
+- A module reached twice through imports, as in a diamond, is merged once.
+- A module that imports itself, directly or through other imports, gives `Plain syntax error: Circular import detected: {module}.`.
+- An imported module with a `functional specs` section, even an empty one, raises `ImportedModuleWithFunctionalitiesError`.
+- An imported module that does not exist raises `ModuleDoesNotExistError` with `Module does not exist ({module}).`.
+
+# read-module-file
+:ModuleParser: reads a :Module: by name from the first of :TemplateDirs: that holds `<name>.plain` as a regular file, decoding it as UTF-8.
+- A module found nowhere raises `ModuleDoesNotExistError`.
+- A module whose text holds a :Base64Blob: raises `UnsupportedBase64Content` with the blob length.
+
+# require-imported-concepts
+An imported module lists in its :Frontmatter: key `required_concepts` the concepts the importing module must define.
+- Each entry is a :Definition: text without its leading `- `; its concepts are required.
+- An imported module that lists `required_concepts` also passes on the concepts still required by its own imports.
+- A required concept is satisfied when the definitions of the importing module, its own or merged from its imports, define it.
+- The concepts still required are part of the :ParseResult:.
+
+# normalize-concept-lists
+:ModuleParser: normalizes the :Frontmatter: keys `exported_concepts` and `required_concepts` to lists of texts.
+- A string entry becomes `- ` followed by the entry.
+- A mapping entry becomes one text `- {key}: {value}` per pair.
+- Another entry raises `Plain syntax error: Invalid {directive} metadata. Expected a dictionary or a string.`; a value that is not a list raises an assertion error `Syntax error: Invalid {directive} metadata. Expected a list.`.
+
+# check-exported-concepts
+:ModuleParser: checks every concept a :Module: lists in `exported_concepts` while parsing it.
+- An entry that is not a :Definition: text, or holds an invalid name, gives `exports an invalid concept`.
+- One of :PredefinedConcepts: gives `cannot export default concept`.
+- A concept not defined in the module's definitions, its own or merged from its imports, gives `exports undefined concept`; when the module has a `requires` list, the message adds that a concept inherited through requires cannot be re-exported.
+- One entry may name several comma-separated concepts.
+
+# mark-code-variables
+The `code_variable` Liquid filter marks a value as a :CodeVariable:.
+- When the render was given a `code_variables` mapping, the filter stores a new random 32-character hex token in it, mapped to `{variable name: value}`, and outputs the token; otherwise it outputs the value unchanged.
+- The variable name is the name of the first named argument of the enclosing :IncludeTag:, whichever variable the filter is applied to; outside an :IncludeTag: it is `code_variables`.
+- With an empty Liquid scope the filter raises `Invalid use of code_variable filter!`.
+
+# record-code-variables
+In a :PlainSourceTree:, every item or :Functionality: whose text holds a code-variable token has the token replaced with the placeholder of its variable name and gets `code_variables`, a list of `{"name", "value"}` in recording order.
+- An include written twice with different values gives each item its own value.
+
+# check-module-shape
+:ModuleParser: checks that a :Module: about to be rendered has the right shape.
+- Concepts still required by imports raise `Not all required concepts were defined. Missing required concepts: ...`.
+- No `functional specs` section raises `MissingFunctionalitiesError`.
+- A `functional specs` section without a :Functionality: raises `PlainSyntaxError` naming the previous syntax.
+- No implementation req, own or imported, raises `defines functionalities but specifies no implementation reqs`; when the module has a `requires` list, the message adds that implementation reqs are not inherited through requires.
+
+# parse-single-module
+:ModuleParser: parses an entry :Module: file name over :TemplateDirs: into its module name, :PlainSourceTree: and `requires` list.
+- A name not ending in `.plain` raises `Invalid plain file extension: {suffix}. Expected: .plain.`.
+- The module name is the relative path without `.plain`, with `/` as separator; for an absolute path it is the file name without `.plain`.
+- After the shape check, the definitions exported to the module are merged, links are resolved, the tree is marshalled, code variables are recorded and concepts are validated; concept errors raise `Found {count} errors in the plain file:` with one error per line.
+- The `definitions` of the tree are sorted so that each concept comes after the concepts it mentions.
+- A module without `requires` returns an empty `requires` list.

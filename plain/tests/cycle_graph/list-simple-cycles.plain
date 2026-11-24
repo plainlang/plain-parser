@@ -1,0 +1,46 @@
+---
+module: cycle_graph
+func_id: list-simple-cycles
+---
+
+***conformance tests***
+
+# graph-without-cycles
+The :Graph: a→[b], b→[c], c→[] yields no cycle.
+
+# empty-graph
+The empty :Graph: yields no cycle.
+
+# self-loop
+The :Graph: a→[a] yields exactly the cycle [a].
+
+# two-node-cycle
+The :Graph: a→[b], b→[a] yields one cycle, the nodes a and b.
+
+# successor-only-node-is-tolerated
+The :Graph: a→[b, ghost], b→[a] yields one cycle, the nodes a and b.
+
+# complete-graph-on-three-nodes
+The complete :Graph: on the nodes a, b, c (each node points to the two others) yields 5 cycles.
+
+# complete-graph-on-four-nodes
+The complete :Graph: on the nodes a, b, c, d yields 20 cycles.
+
+# separate-cycles
+The :Graph: a→[b], b→[a], x→[y], y→[x], lone→[] yields two cycles: the nodes a and b, and the nodes x and y.
+
+# edge-order
+The :Graph: a→[b], b→[c], c→[a] yields one cycle in which every node has the next node, and the last node has the first, as a successor.
+
+# repeated-edge
+The :Graph: a→[b, b], b→[a, a] yields exactly [[a, b]].
+
+# separate-cycles-in-node-order
+The :Graph: p0→[p1], p1→[p0], q0→[q1], q1→[q0], r0→[r1], r1→[r0], s0→[s1], s1→[s0], t0→[t1], t1→[t0] yields cycles whose first nodes start with p, q, r, s, t in that order.
+
+# matches-brute-force
+For 200 random :Graph: values on 1 to 6 integer nodes 0..n-1, built in node order, the yielded cycles are exactly the cycles found by trying every ordered node subset.
+- No cycle is yielded twice, counting rotations of one cycle as the same cycle.
+- The smallest nodes of the yielded cycles of two or more nodes are in non-decreasing order.
+
+***acceptance tests***

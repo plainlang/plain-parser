@@ -1,0 +1,25 @@
+---
+module: project
+func_id: reject-invalid-test-plain-files
+---
+
+***conformance tests***
+
+> add conformance test scenarios here
+
+***acceptance tests***
+
+# unknown-func-id
+`tests/a.plain` bound to `todo:delete-task` raises exactly `Plain syntax error: Test plain file 'tests/a.plain' binds to functionality 'todo:delete-task', which module 'todo' does not have.`.
+
+# no-binding-keys
+`tests/helper.plain` holding `***definitions***`, an empty line and `- ⟨Helper⟩ helps.` raises exactly `Plain syntax error: File 'tests/helper.plain' is under a tests folder but is not a test plain file: its frontmatter needs the keys `module:` and `func_id:`.`.
+
+# invalid-frontmatter
+`tests/broken.plain` holding `---`, `module: [`, `---` raises `PlainSyntaxError` holding `File 'tests/broken.plain' under a tests folder has invalid frontmatter`.
+
+# file-errors-name-the-file
+`tests/a.plain` bound to `todo:add-task` with only a conformance section raises `PlainSyntaxError` holding `Test plain file 'tests/a.plain' has no `***acceptance tests***`.
+
+# not-a-text-file
+`tests/bin.plain` holding the bytes 0x00 0xff 0xfe raises `PlainSyntaxError` holding `File 'tests/bin.plain' under a tests folder is not a text file.`.

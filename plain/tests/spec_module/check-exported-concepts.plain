@@ -1,0 +1,35 @@
+---
+module: spec_module
+func_id: check-exported-concepts
+---
+
+***conformance tests***
+
+# export-own-concept
+The module `exported_concepts`, which defines and exports Concept, parses.
+
+# export-imported-concept
+A module that imports `exported_concepts_base`, which defines Concept, and exports Concept parses.
+
+# several-per-entry
+A module exporting `⟨NewConcept⟩, ⟨OtherConcept⟩` in one entry and defining both parses.
+
+***acceptance tests***
+
+# export-predefined-concept
+A module exporting `⟨Implementation⟩` raises `PlainSyntaxError` holding `cannot export default concept`.
+
+# export-inherited-concept
+A module that requires `exported_concepts`, uses its Concept, and exports Concept raises `PlainSyntaxError` holding `cannot be re-exported`.
+
+# export-malformed
+A module exporting `Concept` without colons raises `PlainSyntaxError` holding `exports an invalid concept`.
+
+# export-undefined-names-module
+The module `exported_concepts_missing_definition`, which exports a concept it does not define, raises `PlainSyntaxError` holding `'exported_concepts_missing_definition' exports` and `exports undefined concept`, also when parsed as the requires of another module.
+
+# export-undefined-in-multi-entry
+A module exporting `⟨NewConcept⟩, ⟨OtherConcept⟩` and defining only NewConcept raises `PlainSyntaxError` holding `exports undefined concept`.
+
+# export-without-definitions
+A module exporting Concept with no `definitions` section raises `PlainSyntaxError` holding `exports undefined concept`.

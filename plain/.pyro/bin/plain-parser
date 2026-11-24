@@ -1,0 +1,3 @@
+#!/bin/bash
+export PYTHONPATH=/Users/nero/DevelCodeplain/cap-examples/plain-parser/plain/plain_module/code/src
+exec /Users/nero/DevelCodeplain/cap-examples/plain-parser/.venv/bin/python -c 'import sys; from plain_parser.cli import main; sys.exit(main())' "$@" 2> >(grep -v _editable_impl >&2)

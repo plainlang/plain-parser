@@ -1,0 +1,22 @@
+---
+module: spec_module
+func_id: import-modules
+---
+
+***conformance tests***
+
+> The merge order of imports is checked by marshall-plain-source.
+
+# diamond-import-merged-once
+In the module `diamond_imports_main`, the definition of `diamond_import_common` appears once in the tree.
+
+***acceptance tests***
+
+# imported-module-with-functionalities
+Parsing a module that imports `import_with_functionalities`, which has a `functional specs` section, raises `ImportedModuleWithFunctionalitiesError` whose message holds `use 'requires' instead of 'import'`.
+
+# non-existent-import
+Parsing a module that imports `non_existent_module` raises an error whose message holds `Module does not exist`.
+
+# circular-imports
+Parsing `circular_imports_main`, which imports `circular_imports_1`, which imports `circular_imports_2`, which imports `circular_imports_1`, raises an error whose message holds `Circular import detected`.

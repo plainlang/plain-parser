@@ -1,0 +1,36 @@
+---
+module: concepts
+func_id: sort-definitions
+---
+
+***conformance tests***
+
+# single-item
+[`- ⟨A⟩ is x.`] stays as is.
+
+# no-mentions-keep-file-order
+[`- ⟨B⟩ is y.`, `- ⟨A⟩ is x.`] stays in that order.
+
+# dependency-first
+[`- ⟨B⟩ uses ⟨A⟩.`, `- ⟨A⟩ is x.`] becomes A, B.
+
+# diamond
+[`- ⟨D⟩ uses ⟨B⟩ and ⟨C⟩.`, `- ⟨B⟩ uses ⟨A⟩.`, `- ⟨C⟩ uses ⟨A⟩.`, `- ⟨A⟩ is x.`] puts A before B and C, and B and C before D.
+
+# sub-item-mention
+[`- ⟨B⟩ is y.` with the nested item `  - it uses ⟨A⟩.`, `- ⟨A⟩ is x.`] becomes A, B.
+
+# multi-concept-definition
+[`- ⟨C⟩ uses ⟨A⟩ and ⟨B⟩.`, `- ⟨A⟩, ⟨B⟩ are twins.`] becomes the twins item, then C.
+
+# self-mention-is-ignored
+[`- ⟨B⟩ uses ⟨A⟩.`, `- ⟨A⟩ is like ⟨A⟩.`] becomes A, B.
+
+# predefined-mention-is-ignored
+[`- ⟨B⟩ uses ⟨A⟩ and ⟨Implementation⟩.`, `- ⟨A⟩ is x.`] becomes A, B.
+
+# graph-order
+The items are given in the order Concept3 (mentions Concept1 and Concept2), Concept2 (mentions Concept1), Concept1, NonReferencedConcept, Concept4 (mentions Concept3), Concept8 (mentions Concept1), Concept5 (mentions Concept1), Concept6 (mentions Concept1 and Concept4), Concept7, Concept9 (mentions Concept8).
+- They are sorted to Concept1, NonReferencedConcept, Concept7, Concept2, Concept8, Concept5, Concept3, Concept9, Concept4, Concept6.
+
+***acceptance tests***

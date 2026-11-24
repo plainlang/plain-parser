@@ -1,0 +1,20 @@
+---
+module: spec_module
+func_id: find-linked-resources
+---
+
+***conformance tests***
+
+# independent-of-working-directory
+Parsing the module with the two linked yaml files from another working directory gives the same linked_resources.
+
+***acceptance tests***
+
+# url-link
+A module linking `https://example.com/spec.yaml` raises an error holding `Only relative links are allowed`.
+
+# absolute-link
+A module linking an absolute path raises an error holding `Only relative links are allowed`.
+
+# missing-link-lists-directories
+A module linking `resources/missing_resource.yaml`, which does not exist, raises `PlainSyntaxError` whose message holds `resources/missing_resource.yaml does not exist`, `highest to lowest precedence` and the module's directory.

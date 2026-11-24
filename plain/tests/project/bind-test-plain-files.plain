@@ -1,0 +1,33 @@
+---
+module: project
+func_id: bind-test-plain-files
+---
+
+***conformance tests***
+
+# scenarios-are-merged
+`tests/todo/add-task.plain` binds to `todo:add-task` with the conformance scenario `add-one` (`Adding one ⟨Task⟩ shows it.`) and the acceptance scenario `add-then-list` (`Add, then list.`).
+- The bound files are [(`tests/todo/add-task.plain`, `todo`, `add-task`)].
+- `add-task` has conformance_tests [{id `add-one`, text `Adding one ⟨Task⟩ shows it.`, linked_resources []}] and acceptance_tests [{id `add-then-list`, text `Add, then list.`, linked_resources []}].
+- `list-tasks` has conformance_tests [].
+
+# name-is-convention-only
+`tests/anything.plain` bound to `todo:list-tasks` with the scenario `lists` gives `list-tasks` the conformance scenario `lists`.
+
+# merge-in-discovery-order
+`tests/b.plain`, `tests/a.plain` and `tests/sub/c.plain`, bound to `todo:add-task` with the scenarios `from-b`, `from-a` and `from-c`, give `add-task` the conformance scenarios `from-a`, `from-b`, `from-c`.
+
+# folders-in-given-order
+`more/b.plain` with `from-b` and `tests/a.plain` with `from-a`, both bound to `todo:add-task`, read with the tests folders [`more`, `tests`], give `from-b`, `from-a`.
+
+# file-of-another-module-is-passed-over
+`tests/todo/add-task.plain` bound to `todo:add-task` and `tests/notes/add-note.plain` bound to `notes:add-note` give the bound files [`tests/todo/add-task.plain`] and `add-task` the scenario `works`.
+
+# file-of-another-module-is-not-read
+`tests/notes/add-note.plain` bound to `notes:add-note`, with a scenario mentioning the undefined ⟨Note⟩ and no acceptance section, gives no bound file and no error.
+
+# required-module-files
+`core.plain` exports and defines Task and has the functionality `store-task`; `todo.plain` requires `core`, imports `shared` (which defines Clock), and its `add-task` mentions Task and Clock.
+- `tests/core/store-task.plain` with the scenario `stores` (`A ⟨Task⟩ is kept.`) and `tests/todo/add-task.plain` with `works` (`A ⟨Task⟩ at ⟨Clock⟩.`) bind to `core:store-task` and `todo:add-task` without error.
+
+***acceptance tests***

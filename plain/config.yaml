@@ -1,0 +1,5 @@
+unittests-script: test_scripts/run_unittests_python.sh
+conformance-tests-script: test_scripts/run_conformance_tests_python.sh
+tests-folder: tests
+template-dir: template
+build-dest: dist

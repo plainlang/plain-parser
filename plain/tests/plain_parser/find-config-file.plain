@@ -1,0 +1,26 @@
+---
+module: plain_parser
+func_id: find-config-file
+---
+
+***conformance tests***
+
+# config-next-to-spec
+With `project/config.yaml` holding `template-dir: template`, `plain-parser check project/top.plain` run from the parent of `project` prints the OK line.
+
+# config-in-working-directory
+With `config.yaml` holding `template-dir: project/template` in the working directory and none next to the module, `plain-parser check project/top.plain` prints the OK line.
+
+# config-name-option
+With the configuration in `project/web.config.yaml`, `plain-parser check project/top.plain --config-name web.config.yaml` prints the OK line, and without the option it exits with code 1.
+
+# no-config
+Without any config file, `plain-parser check project/top.plain` exits with code 1 and writes exactly `Error: Module does not exist (helper).` on standard error.
+
+***acceptance tests***
+
+# config-in-both-places
+With a config file next to the module and another in the working directory, `plain-parser check project/top.plain` exits with code 2 and writes `found in two locations` on standard error; the same holds with `--template-dir`, and for `parse`, which writes nothing on standard output.
+
+# unreadable-config
+A config file holding `template-dir: [unclosed` makes `plain-parser check` exit with code 2 and write `Error reading config file` on standard error.

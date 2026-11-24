@@ -1,0 +1,26 @@
+---
+module: resource_loading
+func_id: render-liquid
+---
+
+***conformance tests***
+
+# include-is-loaded-and-recorded
+With `t.plain` holding `B` in a template directory, rendering `A {% raw %}{% include 't.plain' %}{% endraw %}` gives `A B` and the loaded templates {`t.plain`: `B`}.
+
+***acceptance tests***
+
+# missing-include
+Rendering `{% raw %}{% include 'nope.plain' %}{% endraw %}` raises the Liquid template-not-found error whose message holds `nope.plain` and not `--template-dir`.
+
+# malformed-tag
+Rendering the text named `malformed_tag` with the lines `***functional specs***`, an empty line, and `{% raw %}{% if %}{% endraw %}` raises `PlainSyntaxError` whose message starts with `Plain syntax error: Invalid Liquid at malformed_tag`, then the line `3` and the column `0`, each after a colon, then a colon and a space.
+
+# unterminated-output
+Rendering the text named `unterminated_output` with the lines `***functional specs***`, an empty line, `# a-user-can-add-a` and `A user can add a {% raw %}{{ task_name{% endraw %}`, ending with a newline, raises `PlainSyntaxError` whose message starts with `Plain syntax error: Invalid Liquid at unterminated_output`, then the line `5` and the column `0`, each after a colon, then a colon and a space.
+
+# undefined-variable
+Rendering `{% raw %}{{ missing }}{% endraw %}` raises an error whose message starts with `Undefined liquid variable: `.
+
+# error-message-without-position
+A Liquid syntax error `missing expression` without a position is reported as `Plain syntax error: Invalid Liquid in header: missing expression` for the template `header`, and as `Plain syntax error: Invalid Liquid: missing expression` without a template name.

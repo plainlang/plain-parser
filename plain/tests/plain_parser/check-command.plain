@@ -1,0 +1,50 @@
+---
+module: plain_parser
+func_id: check-command
+---
+
+***conformance tests***
+
+# valid-module
+`plain-parser check valid.plain`, run from its directory, writes exactly `valid.plain: OK` on standard output, nothing on standard error, and exits with code 0.
+
+# probe-module
+A module `probe.plain` with the implementation req `- ⟨Implementation⟩ is written in Python 3.12.` and the functionality `probe` with the body `⟨Implementation⟩ starts.`, checked from its directory without a config file, gives exit code 0, standard output `probe.plain: OK` and no standard error.
+
+# minimal-test-plain-file
+In the project, replacing `list-tasks.plain` with its frontmatter and the two section lines on adjacent lines still prints the OK line.
+
+***acceptance tests***
+
+# undefined-concepts
+`undefined_concept.plain`, which mentions the undefined User and Visitor, gives exit code 1, no standard output, and standard error starting with `Error: Plain syntax error: Found 2 errors in the plain file:` and a newline, naming ⟨User⟩ and ⟨Visitor⟩, without `Traceback`.
+
+# missing-linked-resource
+`missing_resource.plain` linking `does_not_exist.md`, checked from another directory, writes exactly `Error: Plain syntax error: Link does_not_exist.md does not exist. Linked resources are looked up relative to the following directories (highest to lowest precedence):`, a newline, `  1. ` with the module's directory, and a newline.
+
+# relative-template-dir-listed-absolute
+With `--template-dir tpl` relative to the working directory, the same error ends with `  1. ` and the module's directory, a newline, `  2. ` and the absolute path of `tpl`, and a newline.
+
+# binary-resource
+`binary_resource.plain` linking `binary.bin` writes standard error starting with `Error: Referenced resource 'binary.bin' in module 'binary_resource' is a binary file.`; `requires_binary_resource_top.plain`, whose required module `requires_binary_resource_base` links it, names `requires_binary_resource_base`.
+
+# base64-resource
+`base64_resource.plain` linking `../sample_base64_image.txt`, which holds a long base64 image, writes standard error starting with `Error: Referenced resource '../sample_base64_image.txt' in module 'base64_resource' contains a large base64-encoded blob`.
+
+# binary-scenario-resource
+A scenario of `list-tasks` linking the binary file `listing.bin` next to `todo.plain` makes `check` write standard error starting with `Error: Referenced resource 'listing.bin' in module 'todo' is a binary file.`.
+
+# missing-module
+`plain-parser check does_not_exist.plain` writes exactly `Error: Module does not exist (does_not_exist).` and exits with code 1.
+
+# wrong-extension
+`plain-parser check not_plain.md` writes exactly `Error: Plain syntax error: Invalid plain file extension: .md. Expected: .plain.` and exits with code 1.
+
+# missing-test-plain-file
+In the project, removing `list-tasks.plain` makes `check` exit with code 1, print nothing on standard output, and write exactly `Error: Functionality todo:list-tasks has no test plain file. Add one, by convention tests/todo/list-tasks.plain, with the add-test-scenarios skill.`.
+
+# test-plain-file-error
+In the project, `list-tasks.plain` whose scenario `lists` on line 8 mentions the undefined Note makes `check` write exactly `Error: Plain syntax error: Found 1 errors in test plain file 'tests/todo/list-tasks.plain':`, a newline, and `Syntax error at line 8 in test plain file 'tests/todo/list-tasks.plain': Concept ⟨Note⟩ used in scenario `lists` is not defined in module 'todo'.`.
+
+# interrupted
+When the check or the config lookup is interrupted, `check` returns 130, prints nothing on standard output, and writes no `Traceback`.

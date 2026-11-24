@@ -1,0 +1,43 @@
+---
+module: concepts
+func_id: report-concept-cycles
+---
+
+***conformance tests***
+
+> Cycle reports are the expected result of sorting definitions that mention each other.
+
+# two-node-cycle
+Sorting [`- ⟨A⟩ uses ⟨B⟩.`, `- ⟨B⟩ uses ⟨A⟩.`] raises `PlainSyntaxError` whose message holds `Cycles are not allowed`, `- ⟨A⟩ uses ⟨B⟩.` and `- ⟨B⟩ uses ⟨A⟩.`.
+
+# long-cycle-in-reference-order
+Sorting [`- ⟨A⟩ uses ⟨B⟩.`, `- ⟨B⟩ uses ⟨C⟩.`, `- ⟨C⟩ uses ⟨A⟩.`, `- ⟨D⟩ is on its own.`] raises a message holding the lines `Cycle 1: ⟨A⟩ -> ⟨B⟩ -> ⟨C⟩ -> ⟨A⟩`, `- ⟨A⟩ uses ⟨B⟩.`, `- ⟨B⟩ uses ⟨C⟩.`, `- ⟨C⟩ uses ⟨A⟩.` in a row, and not holding `- ⟨D⟩ is on its own.`.
+
+# cycle-through-multi-concept-definition
+Sorting [`- ⟨A⟩, ⟨B⟩ use ⟨C⟩.`, `- ⟨C⟩ uses ⟨B⟩.`] raises a message holding `Cycles are not allowed`.
+
+# two-separate-cycles
+Sorting [`- ⟨A⟩ uses ⟨B⟩.`, `- ⟨B⟩ uses ⟨A⟩.`, `- ⟨X⟩ uses ⟨Y⟩.`, `- ⟨Y⟩ uses ⟨X⟩.`] raises a message holding `Found 2 cycle`, `Cycle 1: ⟨A⟩ -> ⟨B⟩ -> ⟨A⟩` and `Cycle 2: ⟨X⟩ -> ⟨Y⟩ -> ⟨X⟩`.
+
+# tangle
+Sorting [`- ⟨Order⟩ is placed by a ⟨Customer⟩ and billed by an ⟨Invoice⟩.`, `- ⟨Customer⟩ has ⟨Order⟩ items and ⟨Invoice⟩ items.`, `- ⟨Invoice⟩ bills an ⟨Order⟩ to a ⟨Customer⟩.`] raises a message holding `Found 5 cycle` and five `Cycle ` lines.
+
+# capped-at-ten
+Sorting the four mutually mentioning definitions of Order, Customer, Invoice and Payment raises a message holding `Found more than 10 cycles` and `Showing the first 10.`, with ten `Cycle ` lines.
+
+# exactly-ten
+Sorting ten separate pairs `- ⟨Ai⟩ uses ⟨Bi⟩.`, `- ⟨Bi⟩ uses ⟨Ai⟩.` for i from 0 to 9 raises a message holding `Found 10 cycle(s)`, not holding `Showing`, with ten `Cycle ` lines.
+
+# earliest-defined-cycles-shown
+Sorting twelve such pairs for i from 0 to 11 lists `Cycle 1: ⟨A0⟩ -> ⟨B0⟩ -> ⟨A0⟩` first and `Cycle 10: ⟨A9⟩ -> ⟨B9⟩ -> ⟨A9⟩` last.
+
+# definition-order-not-first-mention
+With the twelve pairs and the first item changed to `- ⟨A0⟩ uses ⟨B0⟩, ⟨A10⟩ and ⟨A11⟩.`, the last listed cycle is `Cycle 10: ⟨A9⟩ -> ⟨B9⟩ -> ⟨A9⟩` and no `Cycle ` line names A10 or A11.
+
+# shared-definition-once
+Sorting [`- ⟨A⟩, ⟨B⟩ use ⟨X⟩ and ⟨Y⟩.`, `- ⟨X⟩ uses ⟨B⟩.`, `- ⟨Y⟩ uses ⟨A⟩.`] raises a message in which each cycle block holds `- ⟨A⟩, ⟨B⟩ use ⟨X⟩ and ⟨Y⟩.` exactly once.
+
+# cycle-with-undefined-mention
+Sorting [`- ⟨A⟩ uses ⟨B⟩ and ⟨Ghost⟩.`, `- ⟨B⟩ uses ⟨A⟩.`] raises a message holding `Cycles are not allowed`.
+
+***acceptance tests***

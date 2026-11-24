@@ -1,0 +1,24 @@
+---
+module: test_plain_file
+func_id: read-test-frontmatter
+---
+
+***conformance tests***
+
+> Valid frontmatter is read by read-scenarios.
+
+> add conformance test scenarios here
+
+***acceptance tests***
+
+# extra-key
+The file `extra_frontmatter_key.plain` with the keys `module`, `func_id` and `description` raises exactly `Plain syntax error: Test plain file 'extra_frontmatter_key.plain' has the frontmatter key `description:`; only `module:` and `func_id:` are allowed.`.
+
+# missing-func-id
+The file `missing_func_id.plain` with only `module: task-manager` raises exactly `Plain syntax error: Test plain file 'missing_func_id.plain' has no `func_id:` key in its frontmatter.`.
+
+# module-not-a-string
+The file `module_not_a_string.plain` with `module: [a, b]` raises exactly `Plain syntax error: Test plain file 'module_not_a_string.plain': the frontmatter key `module:` must be a non-empty string.`.
+
+# invalid-yaml
+The text `---`, `module: [`, `---` named `broken.plain` raises `PlainSyntaxError` holding `Test plain file 'broken.plain' has invalid frontmatter`.

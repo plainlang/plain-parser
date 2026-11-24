@@ -1,0 +1,23 @@
+---
+module: resource_loading
+func_id: load-linked-files
+---
+
+***conformance tests***
+
+# text-file
+Loading the link {text `Notes`, target `notes.md`} of module `my_thing`, with `notes.md` holding `# hello`, gives {`notes.md`: `# hello`}.
+
+# small-base64-is-allowed
+Loading a file holding `token=` and 8092 `A` characters gives its text.
+
+***acceptance tests***
+
+# binary-file
+Loading `icon.png` holding PNG bytes that are not valid UTF-8 for module `my_thing` raises `UnsupportedResourceType` whose message holds `icon.png`, `binary file` and `my_thing`.
+
+# missing-file
+Loading `missing.md` for module `my_thing` raises `FileNotFoundError` whose message holds `missing.md` and `my_thing` and not `--template-dir`.
+
+# base64-blob
+Loading `request.txt` holding `curl -d 'selfie_image=` and 8292 `A` characters for module `my_thing` raises `UnsupportedBase64Content` whose message holds `request.txt`, `my_thing` and `8292`.

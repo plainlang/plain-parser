@@ -1,0 +1,86 @@
+---
+description: The plain-parser command line tool and package API, which check and parse a module with its requires chain and test plain files.
+import:
+  - plain_parser_base
+requires:
+  - project
+---
+
+***definitions***
+
+- :Cli: is the `plain-parser` command and its module `plain_parser.cli` of :PythonApi:.
+
+- :ConfigFile: is a YAML file, by default named `config.yaml`, from which :Cli: reads the template directory, the tests folders and whether conformance tests are enabled.
+
+- :SpecParse: is the result of parsing an entry :Module: for :Cli:: its :RequiresChain:, its resource map and its test-file map.
+  - The resource map takes every :LinkedResource: target of the chain and of its scenarios, as written, to the path of the file it resolves to, relative to the entry module's directory with `/` as separator.
+  - The test-file map takes the name of every bound :TestPlainFile: to `{"module", "func_id"}`.
+
+***implementation reqs***
+
+- :Cli: parses arguments with `argparse`, with `prog="plain-parser"` and required subcommands, and reads :ConfigFile: with `yaml.safe_load`.
+
+- :Cli: writes the `parse` output as bytes to the byte buffer of standard output, after flushing the text stream.
+
+***test reqs***
+
+- :ConformanceTests: build the fixture `valid.plain`: it defines `- ⟨App⟩ is a console application.`, has the implementation req `- ⟨App⟩ is written in Python.` and the functionality `app-prints-hello-world` with the body `⟨App⟩ prints "hello, world".`.
+
+- :ConformanceTests: build the fixture `project/top.plain`: it requires `helper`, and `helper.plain` lives only in `project/template/`; both have one implementation req and the functionality `main` with one line of body.
+
+- :ConformanceTests: build the fixture project `project/`: `todo.plain` defines `- ⟨Task⟩ is a thing to do.`, has one implementation req and the functionalities `add-task` and `list-tasks`; `config.yaml` holds `conformance-tests-script: test_scripts/run_conformance_tests.sh` and `tests-folder: tests`; `tests/todo/add-task.plain` holds the conformance scenarios `add-first-task` and `add-without-name` and the acceptance scenario `add-then-list`, and `tests/todo/list-tasks.plain` holds the conformance scenario `list-two-tasks` with the text `With two ⟨Task⟩ items added, `todo list` prints two lines, lowest id first, and exits with status 0.`.
+
+***functional specs***
+
+# export-package-api
+The `plain_parser` package exposes the names of its `__all__` list in :PythonApi:, and installing it provides the `plain-parser` command, which runs :Cli: and exits with its exit code.
+
+# accept-command-line
+:Cli: takes a subcommand, `check` or `parse`, and the path of a :Module: file, with the options `--template-dir DIR`, `--tests-folder DIR` (repeatable) and `--config-name NAME` (default `config.yaml`).
+- A missing subcommand or file path is a usage error: usage text on standard error and exit code 2.
+
+# find-config-file
+:Cli: looks for :ConfigFile: by its name in the directory of the given :Module: file, then in the working directory.
+- Found in both, at two different paths, is a usage error naming both directories; this holds even when `--template-dir` is given.
+- A file that cannot be read as YAML is a usage error `Error reading config file: {error}`.
+- No file found means no configured value.
+
+# read-config-values
+:Cli: reads three keys from :ConfigFile: and ignores every other key.
+- `template-dir` or `template_dir` names the template directory.
+- `tests-folder` or `tests_folder` names one :TestsFolder: as a string, or several as a list.
+- `conformance-tests-script` or `conformance_tests_script`, when set, turns on the check that every :Functionality: has a :TestPlainFile:.
+- For each key the dashed spelling is read first and an empty value counts as unset; a relative path, after `~` expansion, resolves against the directory of :ConfigFile:.
+- `--template-dir` replaces the configured template directory and `--tests-folder` replaces the configured tests folders; options resolve against the working directory.
+- With the check on and no tests folder from either source, the run is a usage error: `conformance-tests-script is set in the config file, but no tests folder is given. Pass --tests-folder or set tests-folder in the config file.`.
+- Without any tests folder, no :TestPlainFile: is read.
+
+# parse-spec
+:Cli: parses an entry :Module: file into a :SpecParse:, raising the first error found.
+- :TemplateDirs: are the absolute directory of the entry file, then the absolute template directory when one is given and not empty; a template directory that does not exist is searched without error.
+- The chain is parsed and test plain files are bound as by `plain_parser.project`, with the check for missing test plain files when it is on.
+- For each module of the chain in order, its links and the links of its scenarios are collected; when linked files are to be loaded, they are read and checked right away, so a linked-file error of an ancestor comes before any later error.
+- A target found in a template directory maps to that directory made relative to the entry directory, joined with the target as written: `notes.md` next to the module maps to `notes.md`, and one found only in a sibling `tpl` directory maps to `../tpl/notes.md`; symlinks are not resolved.
+- When no relative path exists, the target maps to the absolute path with `/` as separator.
+- A target linked from several modules has one entry.
+- Last, the specifications of every :Functionality: of the entry module are collected, which finds code variables with two values.
+
+# check-command
+`plain-parser check <file>` validates the module with :SpecParse:, loading linked files, and prints `<file>: OK` with the path as given, exit code 0.
+- Linked files must be text without a :Base64Blob:; a binary or base64 file fails the check.
+- On an error it prints `Error: {message}` on standard error, nothing on standard output, and exits with code 1, without a traceback.
+- On an interrupt it exits with code 130 without a traceback and prints nothing on standard output.
+
+# parse-command
+`plain-parser parse <file>` prints the :SpecParse: as one JSON document, indented by 2, followed by one newline, and exits with code 0; linked files are located but not read.
+- The document is `{"format_version": 2, "modules": [{"module": name, "tree": PlainSourceTree}, ...], "resources": {...}, "test_plain_files": {...}}`, modules in :RequiresChain: order.
+- On a parser error it prints `{"format_version": 2, "type": "<error class name>", "message": "<message>"}`, nothing on standard error, and exits with code 1; the message equals the `check` message after `Error: `.
+- Usage errors behave as for `check`, with nothing on standard output; an interrupt exits with code 130 and prints nothing on standard output.
+
+# write-parse-output
+`plain-parser parse` writes its JSON as UTF-8 with non-ASCII characters unescaped, whatever the encoding of standard output.
+- A value that JSON cannot represent turns the output into the error document of its error class, with exit code 1.
+- A parser error message holding text that is not valid UTF-8 keeps its error class, with each such character written as a backslash escape.
+- A valid result holding such text becomes the error document of the encoding error, with the message `The parse result holds text that is not valid UTF-8: {line}`, where the line is the output line holding the text, stripped, without its trailing comma, with backslash escapes; for example `"module": "bad\udcffname"`.
+- When standard output has no byte buffer, the text is written to it directly.
+- When the reader has closed the pipe, the run ends with the same exit code and prints no error.

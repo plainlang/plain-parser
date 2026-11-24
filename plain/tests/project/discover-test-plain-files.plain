@@ -1,0 +1,17 @@
+---
+module: project
+func_id: discover-test-plain-files
+---
+
+***conformance tests***
+
+# path-order
+With `tests/b.plain`, `tests/a.plain` and `tests/sub/c.plain` all bound to `todo:add-task`, the bound files are `tests/a.plain`, `tests/b.plain`, `tests/sub/c.plain`.
+
+# folder-order
+With the tests folders [`more`, `tests`], `more/b.plain` and `tests/a.plain` are bound in that order.
+
+# missing-folder
+Without a `tests` directory, no file is bound.
+
+***acceptance tests***

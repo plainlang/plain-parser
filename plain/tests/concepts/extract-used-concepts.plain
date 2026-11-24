@@ -1,0 +1,11 @@
+---
+module: concepts
+func_id: extract-used-concepts
+---
+
+***conformance tests***
+
+# mentions-in-order
+The text `⟨B⟩ uses ⟨A⟩ and ⟨B⟩.` mentions [⟨B⟩, ⟨A⟩, ⟨B⟩].
+
+***acceptance tests***

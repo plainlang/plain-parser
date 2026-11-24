@@ -1,0 +1,11 @@
+---
+module: spec_tree
+func_id: define-error-classes
+---
+
+***conformance tests***
+
+# error-classes-are-exceptions
+Each of `PlainSyntaxError`, `UnsupportedBase64Content`, `UnsupportedResourceType`, `InvalidFridArgument`, `InvalidLiquidVariableName`, `ModuleDoesNotExistError`, `MissingFunctionalitiesError`, `ImportedModuleWithFunctionalitiesError` and `MissingTestPlainFileError` in :ErrorClasses: is a subclass of the base exception class.
+
+***acceptance tests***

@@ -1,0 +1,20 @@
+---
+module: project
+func_id: check-bound-scenarios
+---
+
+***conformance tests***
+
+# same-id-in-two-functionalities
+`tests/a.plain` with the scenario `works` for `todo:add-task` and `tests/b.plain` with `works` for `todo:list-tasks` bind without error.
+
+***acceptance tests***
+
+# undefined-concept
+`tests/a.plain` bound to `todo:add-task` with the scenario `works` on line 8, `A ⟨Task⟩ and a ⟨Note⟩ are added.`, raises exactly `Plain syntax error: Found 1 errors in test plain file 'tests/a.plain':` and, on the next line, `Syntax error at line 8 in test plain file 'tests/a.plain': Concept ⟨Note⟩ used in scenario `works` is not defined in module 'todo'.`.
+
+# required-module-does-not-see-entry-concepts
+`core.plain` has the functionality `store-task` and no definitions; `todo.plain` requires `core` and defines Task; `tests/core/store-task.plain` with the scenario `stores` mentioning Task raises `PlainSyntaxError` holding `Concept ⟨Task⟩ used in scenario `stores` is not defined in module 'core'`.
+
+# duplicate-id-across-files
+`tests/a.plain` with the conformance scenario `works` on line 8 and `tests/b.plain` with the acceptance scenario `works` on line 11, both bound to `todo:add-task`, raise exactly `Plain syntax error: Syntax error at line 11 in test plain file 'tests/b.plain': Duplicate scenario-id `works` for functionality 'todo:add-task'; it is first used at line 8 in test plain file 'tests/a.plain'.`.

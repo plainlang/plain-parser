@@ -1,0 +1,16 @@
+---
+module: spec_tree
+func_id: replace-code-variables
+---
+
+***conformance tests***
+
+# replace-in-scenario
+The first functionality f1 of a tree has a conformance scenario `greets` whose text is `It prints ` followed by the placeholder of `greeting` and `.`, with code_variables [{name `greeting`, value `hello`}].
+- The specifications for f1 hold the conformance scenario {id `greets`, text `It prints hello.`}.
+- The code variables are {`greeting`: `hello`}.
+
+# replacement-off
+With replacement turned off, the same scenario keeps its placeholder text and the code variables are still {`greeting`: `hello`}.
+
+***acceptance tests***

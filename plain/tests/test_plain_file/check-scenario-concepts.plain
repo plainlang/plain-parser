@@ -1,0 +1,17 @@
+---
+module: test_plain_file
+func_id: check-scenario-concepts
+---
+
+***conformance tests***
+
+# all-concepts-visible
+The parsed `valid.plain` of read-scenarios has no concept error with the visible concepts Task, TaskList, App and User.
+
+# missing-concept
+With the visible concepts Task, App and User, it gives exactly the three errors `Syntax error at line 10 in test plain file 'valid.plain': Concept ⟨TaskList⟩ used in scenario `add-first-task` is not defined in module 'task-manager'.`, and the same for line 14 and `add-without-name`, and line 26 and `gherkin-shape`.
+
+# predefined-concepts
+A parsed file whose scenario `works` on line 8 has the text `⟨ConformanceTests⟩ start ⟨Implementation⟩.` has no concept error with no visible concept.
+
+***acceptance tests***

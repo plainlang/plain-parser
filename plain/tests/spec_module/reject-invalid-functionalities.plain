@@ -1,0 +1,34 @@
+---
+module: spec_module
+func_id: reject-invalid-functionalities
+---
+
+***conformance tests***
+
+> add conformance test scenarios here
+
+***acceptance tests***
+
+# heading-outside-functional-specs
+Parsing `***implementation reqs***`, an empty line, `# add-task`, `- A req.` raises `PlainSyntaxError` holding `Syntax error at line 3: A `# <func-id>` heading is allowed only in the functional specs section (`add-task`).`.
+
+# heading-of-level-two
+A module whose `functional specs` start with `## add-task` on line 11 raises `PlainSyntaxError` holding `Syntax error at line 11: Invalid heading level 2 (`add-task`). A functionality heading is `# <func-id>`.`.
+
+# invalid-func-id
+Each of the heading lines `#`, `# `, `# add_task`, `# add-task!`, `# Ädd`, `# -add-task`, `# add-task-`, `# add--task`, `# -`, `# ---` on line 11 raises `PlainSyntaxError` holding `Syntax error at line 11: Invalid func-id`.
+
+# invalid-func-id-message
+The module `func_id_invalid` whose heading `# Add Task 2` is on line 10 raises exactly `Plain syntax error: Syntax error at line 10 in module 'func_id_invalid': Invalid func-id (`Add Task 2`). A func-id is lowercase letters and digits, with single hyphens between them.`.
+
+# duplicate-func-id
+The module `func_id_duplicate` with `# add-task` on lines 7 and 13 raises exactly `Plain syntax error: Syntax error at line 13 in module 'func_id_duplicate': Duplicate func-id `add-task`; it is first used at line 7.`.
+
+# content-before-first-heading
+A module whose `functional specs` start on line 11 with `A ⟨Task⟩ can be added.`, or with `  - A ⟨Task⟩ can be added.`, before `# add-task` raises `PlainSyntaxError` holding `Syntax error at line 11: Content before the first `# <func-id>` heading in the functional specs section (`A ⟨Task⟩ can be added.`). A functionality is a `# <func-id>` heading followed by its body; the previous syntax is not supported.`.
+
+# previous-syntax
+The module `old_syntax_functional_specs`, whose `functional specs` hold the item `- Display "hello, world"` on line 11, raises exactly `Plain syntax error: Syntax error at line 11 in module 'old_syntax_functional_specs': Content before the first `# <func-id>` heading in the functional specs section (`Display "hello, world"`). A functionality is a `# <func-id>` heading followed by its body; the previous syntax is not supported.`.
+
+# functionality-without-body
+A module whose heading `# add-task` on line 11 is followed by another heading, by `***test reqs***`, by the end of the file, or by only a comment line raises `PlainSyntaxError` holding `Syntax error at line 11: Functionality `add-task` has no body.`.

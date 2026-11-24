@@ -1,0 +1,23 @@
+---
+module: spec_module
+func_id: require-imported-concepts
+---
+
+***conformance tests***
+
+# required-concept-defined
+The import module `required_concepts` has `required_concepts` [`⟨Concept⟩ is a required concept and needs to be defined in the module that imports this one.`] and the definition `- ⟨DependantConcept⟩ is a concept that depends on the ⟨Concept⟩ concept.`; a module importing it and defining `- ⟨Concept⟩ is a concept.` parses.
+
+# required-concept-defined-by-another-import
+A module importing `required_concepts` and `required_concepts_defs`, which defines Concept, parses, and its definitions are sorted to [`- ⟨Concept⟩ is a concept.`, `- ⟨DependantConcept⟩ is a concept that depends on the ⟨Concept⟩ concept.`].
+
+# nested-required-concepts
+`required_concepts_l2` requires Concept1 and Concept2; `required_concepts_l1` imports it, defines Concept1 and lists no `required_concepts`; a module importing `required_concepts_l1` and defining only Concept2 parses.
+
+***acceptance tests***
+
+# required-concept-missing
+A module importing `required_concepts` and defining nothing raises `PlainSyntaxError` whose message holds `Not all required concepts were defined. Missing required concepts: ⟨Concept⟩.`.
+
+# required-concept-defined-twice
+A module importing `required_concepts_l1` and defining Concept1 and Concept2 raises `PlainSyntaxError` holding `Concepts were defined multiple times`.

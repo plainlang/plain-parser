@@ -1,0 +1,67 @@
+[build-system]
+requires = ["hatchling>=1.32,<2", "hatch-vcs>=0.5,<0.6"]
+build-backend = "hatchling.build"
+
+[project]
+name = "plain-parser"
+dynamic = ["version"]
+description = "Parser for ***plain specification files"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.11"
+classifiers = [
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Topic :: Software Development :: Compilers",
+]
+dependencies = [
+    "python-liquid2>=0.4.0,<0.5",
+    "mistletoe>=1.6.0,<2",
+    "python-frontmatter>=1.3.0,<2",
+    "pyyaml>=6,<7",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==9.2.0",
+    "flake8==7.5.0",
+    "black==26.10.1",
+    "isort==9.0.2",
+    "mypy==2.4.1",
+]
+
+[project.scripts]
+plain-parser = "plain_parser.cli:main"
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/plain_parser"]
+
+[tool.black]
+line-length = 120
+target-version = ["py311"]
+extend-exclude = '''
+^/(.git|.venv|dist|tests/data)/
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 120
+skip = [".git", ".venv", "dist", "tests/data"]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+show_error_codes = true
+# mistletoe and liquid2 token trees are loosely typed; these codes only report their dynamic attributes.
+disable_error_code = ["index", "attr-defined", "union-attr", "arg-type", "annotation-unchecked"]
+exclude = ["^\\.git/", "^\\.venv/", "^tests/"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+norecursedirs = ["tests/data"]

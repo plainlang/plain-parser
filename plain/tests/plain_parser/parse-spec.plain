@@ -1,0 +1,41 @@
+---
+module: plain_parser
+func_id: parse-spec
+---
+
+***conformance tests***
+
+# resource-from-template-dir
+`template_link/spec/top.plain` links `notes.md`, which exists only in `template_link/tpl`; parsing it with that template directory gives the resource map {`notes.md`: `../tpl/notes.md`}, and that value joined onto the entry directory names the same file as resolving `notes.md` in `template_link/tpl`.
+
+# parent-relative-target
+Run from `parent_link`, `a/spec/top.plain` links `../shared/notes.md`, which exists only next to the empty directory `b/tpl`; parsing with `--template-dir b/tpl` gives the resource map {`../shared/notes.md`: `../../b/tpl/../shared/notes.md`}.
+
+# symlink-not-resolved
+`top.plain` links `lnk/../x.md`, where `lnk` is a symlink to `sub/real`, `sub/x.md` holds `read through the symlink` and `x.md` next to the module holds `next to the spec`; the resource map value is `lnk/../x.md`, and opening it from the module directory reads `read through the symlink`.
+
+# target-from-two-modules
+`shared_link_top.plain` and the `shared_link_helper.plain` it requires both link `notes.md`; the modules are `shared_link_helper`, `shared_link_top` and the resource map is {`notes.md`: `notes.md`}.
+
+# scenario-links
+With `list-tasks.plain` holding the scenario `lists` that links `listing.txt` next to `todo.plain`, the resource map is {`listing.txt`: `listing.txt`}.
+
+# relative-entry-path
+From the directory of `subdir`, `plain-parser check subdir/nested.plain` prints the OK line.
+
+# empty-template-dir-is-ignored
+`spec/top.plain` requires `helper`, which lives in the working directory; `plain-parser check spec/top.plain --template-dir ""` exits with code 1 and writes exactly `Error: Module does not exist (helper).` on standard error.
+
+# missing-template-dir-is-ignored
+`plain-parser check valid.plain --template-dir nope`, where `nope` does not exist, prints the OK line.
+
+***acceptance tests***
+
+# no-relative-path
+When computing a relative path fails as for another drive, the resource map of `template_link/spec/top.plain` is {`notes.md`: the absolute path of `template_link/tpl/notes.md` with `/` as separator}.
+
+# ancestor-resource-before-func-id-walk
+`resource_before_frid_walk/top.plain` requires `base.plain`, which links the binary file `../binary.bin`, and has a code variable with two values; `check` writes standard error starting with `Error: Referenced resource '../binary.bin' in module 'base' is a binary file.`.
+
+# code-variable-with-two-values
+`code_variable_conflict.plain` includes `code_variable_template.plain` with `variable_name: "first"` in `implement-first` and `"second"` in `implement-second`; `check` exits with code 1 and writes exactly `Error: Code variable variable_name has multiple values: first and second` on standard error, and `parse` prints that message.

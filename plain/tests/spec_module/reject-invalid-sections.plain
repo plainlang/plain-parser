@@ -1,0 +1,40 @@
+---
+module: spec_module
+func_id: reject-invalid-sections
+---
+
+***conformance tests***
+
+> add conformance test scenarios here
+
+***acceptance tests***
+
+# unknown-section
+Parsing the text of an empty line, `***definitions***`, an empty line and `***Unknown Section:***` raises an error whose message holds `Syntax error at line 4: Invalid specification heading (`Unknown Section:`). Allowed headings: definitions, implementation reqs, test reqs, functional specs`.
+
+# line-number-counts-frontmatter
+The same text after a frontmatter of three lines (`---`, `description: 'x'`, `---`) and an empty line reports line 7.
+
+# line-number-with-windows-line-endings
+The same text with frontmatter, written with CR LF line endings, reports line 7.
+
+# duplicate-section
+Parsing an empty line, `***definitions***`, an empty line and `***definitions***` raises an error holding `Syntax error at line 4: Duplicate specification heading (`definitions`)`.
+
+# duplicate-section-names-the-module
+Parsing the module `duplicate_specification_heading` whose second `***definitions***` is on line 6 raises an error holding `Syntax error at line 6 in module 'duplicate_specification_heading': Duplicate specification heading (`definitions`)`.
+
+# definitions-not-first
+Parsing the module `invalid_specification_order` with `***implementation reqs***`, an item, and `***definitions***` on line 6 raises an error holding `Syntax error at line 6 in module 'invalid_specification_order': Definitions specification must be the first specification in the section (`definitions`)`.
+
+# code-block-in-list-section
+Parsing an empty line, `***definitions***`, and a fenced code block holding `code block` raises an error holding `Syntax error at line 3: Invalid source structure (`code block`)`.
+
+# block-after-list-items
+Parsing `***implementation reqs***`, an empty line, `- A req.`, an empty line and a fenced code block holding `code` raises `PlainSyntaxError` holding `Syntax error at line 5: Invalid source structure`.
+
+# test-section-in-spec-file
+Parsing `***definitions***`, an empty line, `- ⟨Task⟩ is a thing to do.`, an empty line, `***acceptance tests***`, an empty line, `# add`, `Adding works.` raises `PlainSyntaxError` with exactly `Plain syntax error: Syntax error at line 5: The `acceptance tests` section is not allowed in a spec plain file; test scenarios live in test plain files.`; the same holds for `conformance tests`.
+
+# nested-test-section
+A module whose functionality body ends with the indented line `    ***acceptance tests***` on line 14 raises `PlainSyntaxError` holding `Syntax error at line 14: The `acceptance tests` section`.

@@ -1,0 +1,14 @@
+---
+module: resource_loading
+func_id: reject-prohibited-characters
+---
+
+***conformance tests***
+
+# clean-value-passes
+With `t.plain` holding `{% raw %}{{ v | prohibited_chars: '#' }}{% endraw %}`, rendering `{% raw %}{% include 't.plain', v: 5 %}{% endraw %}` gives `5`.
+
+***acceptance tests***
+
+# prohibited-character
+With the same `t.plain`, rendering `{% raw %}{% include 't.plain', v: 'a#b' %}{% endraw %}` raises `InvalidLiquidVariableName` with `'#' is not a valid character for variable 'v' (value: 'a#b').`.

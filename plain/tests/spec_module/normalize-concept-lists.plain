@@ -1,0 +1,14 @@
+---
+module: spec_module
+func_id: normalize-concept-lists
+---
+
+***conformance tests***
+
+# string-entries
+Parsing a module with `exported_concepts` [`⟨Concept⟩ is a concept.`] leaves the frontmatter value [`- ⟨Concept⟩ is a concept.`].
+
+***acceptance tests***
+
+# entry-of-another-type
+A module with `exported_concepts` [5] raises `PlainSyntaxError` with `Plain syntax error: Invalid exported_concepts metadata. Expected a dictionary or a string.`.

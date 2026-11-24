@@ -1,0 +1,11 @@
+---
+module: spec_module
+func_id: normalize-line-endings
+---
+
+***conformance tests***
+
+# mixed-line-endings
+The text `a`, CR LF, `b`, CR, `c`, LF, `d` becomes `a`, LF, `b`, LF, `c`, LF, `d`.
+
+***acceptance tests***

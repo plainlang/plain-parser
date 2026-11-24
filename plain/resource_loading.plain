@@ -1,0 +1,62 @@
+---
+description: File lookup over template directories, linked-file loading with binary and base64 checks, and Liquid rendering with indented includes.
+import:
+  - plain_parser_base
+requires:
+  - spec_tree
+---
+
+***definitions***
+
+- :ResourceLoader: is the `plain_parser.loaders` module of :PythonApi:.
+
+***implementation reqs***
+
+- :ResourceLoader: renders Liquid with a liquid2 `Environment` whose loader is a liquid2 `FileSystemLoader` over :TemplateDirs: that records every loaded template source, with `StrictUndefined`.
+
+- The `plain_parser.liquid_nodes` module of :PythonApi: implements :IncludeTag: as a subclass of the liquid2 include tag and node, and the loader mixin that indents a loaded template.
+
+***functional specs***
+
+# find-base64-blob
+:ResourceLoader: returns the first :Base64Blob: in a text, header included, or none.
+- A run of 8191 such characters is not a blob; the length limit is published as `MAX_BASE64_BLOB_LENGTH` = 8192.
+
+# look-up-files
+:ResourceLoader: looks up a relative file name in :TemplateDirs: in order.
+- Reading returns the UTF-8 text of the first match that is a regular file, or none; a file that is not valid UTF-8 raises the decoding error.
+- Finding returns the first directory in which the name exists as a file or a directory, or none.
+- Resolving returns that directory joined with the name as written, `..` kept, or none.
+- A directory in an earlier entry hides a file of the same name in a later entry when finding and resolving.
+
+# relative-resource-path
+:ResourceLoader: names a file found in a resource directory relative to a base directory, with `/` as separator.
+- The directory part is computed lexically, without resolving symlinks, and the target is appended as written, `..` kept.
+- When the resource directory is the base directory, the result is the target alone.
+- From `/p/app/python`, the target `notes.md` in `/p/tpl` is `../../tpl/notes.md`, and `../sub.md` there is `../../tpl/../sub.md`.
+- When no relative path exists, as for another drive on Windows, the result is the absolute path with `/` as separator.
+
+# load-linked-files
+:ResourceLoader: reads every linked file of a module from :TemplateDirs: and returns a mapping from target to text, reading each target once.
+- A file that is not valid UTF-8 raises `UnsupportedResourceType`.
+- A target found nowhere raises `FileNotFoundError`.
+- A text holding a :Base64Blob: raises `UnsupportedBase64Content` with the blob length.
+- Each message names the target and the module, with the texts of :ErrorMessages:.
+
+# render-liquid
+:ResourceLoader: renders the text of a :PlainFile: with Liquid, loading :IncludeTag: templates from :TemplateDirs:, and returns the rendered text and a mapping from each loaded template name to its source.
+- An undefined variable raises `Undefined liquid variable: {message}`.
+- An include template found nowhere raises the Liquid template-not-found error, with a message `Template not found: ...` that names the template.
+- A Liquid syntax error raises `PlainSyntaxError` with the message `Plain syntax error: Invalid Liquid{position}: {message}` of :ErrorMessages:, where the template name is the optional name given for the text.
+- The filters `code_variable` and `prohibited_chars` are available; here `code_variable` outputs its value unchanged.
+
+# indent-included-templates
+An :IncludeTag: inserts the template source without its trailing whitespace, each of its lines after the first indented by the number of spaces just before the tag on its line.
+- Only the spaces directly before the tag count; any other character resets the count.
+- A tag on a line whose text before it holds `>` is a comment: the tag is written out as its own source text with single quotes, and no template is loaded.
+- The named arguments of the tag are Liquid variables inside the template.
+
+# reject-prohibited-characters
+The `prohibited_chars` Liquid filter takes a string of characters and outputs its value as text when the value holds none of them.
+- A value holding one raises `InvalidLiquidVariableName` with `'{char}' is not a valid character for variable '{variable}' (value: '{value}').`, the variable being the name of the first named argument of the enclosing :IncludeTag:.
+- With an empty Liquid scope the filter raises `Invalid use of prohibited_chars filter!`.

@@ -1,0 +1,67 @@
+---
+module: test_plain_file
+func_id: read-scenarios
+---
+
+***conformance tests***
+
+# valid-file
+Parsing the file named `valid.plain`, with `notes.md` in its template directory:
+~~~
+---
+module: task-manager
+func_id: add-task
+---
+
+> A comment before the first section.
+
+***conformance tests***
+
+# add-first-task
+Adding a ⟨Task⟩ named "Buy milk" to an empty ⟨TaskList⟩ shows one ⟨Task⟩ named "Buy milk".
+  - ⟨App⟩ prints `Added task 1: Buy milk`.
+
+# add-without-name
+
+given:
+  - an empty ⟨TaskList⟩
+when:
+  - ⟨User⟩ runs `todo add`
+then:
+  - stderr is `Error: name is required`
+> A comment inside a body is dropped.
+  - exit status is 1
+
+
+# gherkin-shape
+Scenario: adding a task with a note
+  Given an empty ⟨TaskList⟩
+  When ⟨User⟩ adds "Buy milk"
+
+  Then ⟨TaskList⟩ shows it
+
+# links-the-notes
+The output matches [the notes](notes.md).
+
+***acceptance tests***
+
+# add-then-list
+- ⟨User⟩ adds a ⟨Task⟩ named "Buy milk".
+- `todo list` shows `1 Buy milk`.
+~~~
+gives the name `valid.plain`, module `task-manager`, func-id `add-task`, and:
+- conformance `add-first-task` with its two lines as text, `add-without-name` with the seven lines from `given:` to `  - exit status is 1` without the comment, `gherkin-shape` with its five lines, the empty line kept, and `links-the-notes` with linked_resources [{text `the notes`, target `notes.md`}];
+- acceptance `add-then-list` with its two lines;
+- the heading lines 10, 14, 26, 33 and 38, conformance first;
+- every other scenario with empty linked_resources and no `code_variables` key.
+
+# empty-sections
+A file whose two sections are empty, a file whose two section lines follow the frontmatter on adjacent lines, and a file whose conformance section holds only the comment `> add conformance test scenarios here` each give no scenario.
+
+# liquid-and-code-variables
+With `shape.plain` holding `  - exit status is {% raw %}{{ status | code_variable }}{% endraw %}` in a template directory, the scenario `works` whose text is `It works.` and the line `{% raw %}{% include "shape.plain", status: "0" %}{% endraw %}` becomes {id `works`, text `It works.` and the line `  - exit status is ` with the placeholder of `status`, linked_resources [], code_variables [{name `status`, value `0`}]}.
+
+***acceptance tests***
+
+# liquid-error-names-the-file
+The file `f.plain` whose scenario text holds an unclosed `{% raw %}{{ works{% endraw %}` raises `PlainSyntaxError` holding `Invalid Liquid at f.plain`.

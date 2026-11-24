@@ -1,0 +1,22 @@
+---
+module: spec_module
+func_id: check-module-shape
+---
+
+***conformance tests***
+
+> add conformance test scenarios here
+
+***acceptance tests***
+
+# no-implementation-reqs
+A module with a functionality and an empty `implementation reqs` section, and one without that section, each raise an error holding `defines functionalities but specifies no implementation reqs` and not holding `requires`.
+
+# no-implementation-reqs-with-requires
+A module with a `requires` list, a functionality and no implementation req raises `PlainSyntaxError` holding `not inherited through 'requires'`.
+
+# no-functional-specs-section
+A module without a `functional specs` section raises `MissingFunctionalitiesError` holding `does not have any functionality specified`.
+
+# empty-functional-specs-section
+A module with an empty `functional specs` section raises `PlainSyntaxError` holding `has a 'functional specs' section without a `# <func-id>` heading. A functionality is a `# <func-id>` heading followed by its body; the previous syntax is not supported.`.
